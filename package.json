@@ -1,0 +1,35 @@
+{
+  "name": "earnings-boost",
+  "version": "1.0.0",
+  "description": "Earnings boost",
+  "main": "index.js",
+  "scripts": {
+    "build": "npx hardhat clean && npx hardhat compile",
+    "test": "npx hardhat test",
+    "gas-reporter": "REPORT_GAS=true npx hardhat test",
+    "lint": "npm run lint:ts && npm run lint:sol",
+    "lint:fix": "npm run lint:ts:fix && npm run lint:sol:fix",
+    "lint:ts": "npx prettier --check '**/*.ts'",
+    "lint:ts:fix": "npx prettier --write '**/*.ts'",
+    "lint:sol": "npx prettier --check --plugin=prettier-plugin-solidity 'contracts/**/*.sol'",
+    "lint:sol:fix": "npx prettier --write --plugin=prettier-plugin-solidity 'contracts/**/*.sol'",
+    "prepare": "husky"
+  },
+  "author": "",
+  "license": "ISC",
+  "lint-staged": {
+    "**/*.ts": "npm run lint:ts:fix",
+    "**/*.sol": "npm run lint:sol:fix"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts-upgradeable": "^5.0.2",
+    "hardhat": "^2.22.11"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3",
+    "prettier-plugin-solidity": "^1.4.1"
+  }
+}
