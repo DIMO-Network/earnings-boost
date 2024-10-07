@@ -6,11 +6,12 @@ import '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
 
-contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
+contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
     struct DimoStakingStorage {
-        IERC20 dimoToken;
-        IERC721 vehicleIdProxy;
+        address dimoToken;
+        address vehicleIdProxy;
         mapping(address => Boost) userBoosts;
         mapping(uint256 => BoostLevel) boostLevels;
     }
@@ -55,49 +56,50 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function initialize(address dimoToken, address vehicleIdProxy) external initializer {
+    function initialize(address dimoToken_, address vehicleIdProxy_) external initializer {
         __AccessControl_init();
         __UUPSUpgradeable_init();
+        __ReentrancyGuard_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        $.dimoToken = IERC20(dimoToken);
-        $.vehicleIdProxy = IERC721(vehicleIdProxy);
+        $.dimoToken = dimoToken_;
+        $.vehicleIdProxy = vehicleIdProxy_;
 
         // Initialize boost levels
-        $.boostLevels[0] = BoostLevel(10000 ether, 180 days, 1000);
-        $.boostLevels[1] = BoostLevel(20000 ether, 360 days, 2000);
-        $.boostLevels[2] = BoostLevel(40000 ether, 720 days, 3000);
+        $.boostLevels[0] = BoostLevel(5000 ether, 180 days, 1000);
+        $.boostLevels[1] = BoostLevel(10000 ether, 365 days, 2000);
+        $.boostLevels[2] = BoostLevel(15000 ether, 730 days, 3000);
     }
 
     // TODO Documentation
     function stake(uint256 level, uint256 vehicleId, bool autoRenew) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        if (level > 2) {
-            revert InvalidBoostLevel(level);
-        }
         if ($.userBoosts[msg.sender].amount > 0) {
             revert UserAlreadyHasBoost(msg.sender);
         }
+        if (level > 2) {
+            revert InvalidBoostLevel(level);
+        }
 
-        BoostLevel memory currentLevel = $.boostLevels[level];
-        require($.dimoToken.transferFrom(msg.sender, address(this), currentLevel.amount), 'Transfer failed');
+        BoostLevel memory stakingLevel = $.boostLevels[level];
+        require(IERC20($.dimoToken).transferFrom(msg.sender, address(this), stakingLevel.amount), 'Transfer failed');
 
         $.userBoosts[msg.sender] = Boost({
             level: level,
-            amount: currentLevel.amount,
-            lockEndTime: block.timestamp + currentLevel.lockPeriod,
+            amount: stakingLevel.amount,
+            lockEndTime: block.timestamp + stakingLevel.lockPeriod,
             attachedVehicleId: vehicleId,
             autoRenew: autoRenew
         });
 
-        emit Staked(msg.sender, currentLevel.amount, level, $.userBoosts[msg.sender].lockEndTime);
+        emit Staked(msg.sender, stakingLevel.amount, level, $.userBoosts[msg.sender].lockEndTime);
 
         if (vehicleId != 0) {
-            try $.vehicleIdProxy.ownerOf(vehicleId) returns (address vehicleIdOwner) {
+            try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
                 if (vehicleIdOwner != msg.sender) {
                     revert Unauthorized(msg.sender);
                 }
@@ -109,11 +111,65 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function withdraw() external {
+    function upgradeStake(uint256 level, uint256 vehicleId, bool autoRenew) external {
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+
+        Boost memory boost = $.userBoosts[msg.sender];
+
+        if (boost.amount == 0) {
+            revert NoActiveBoost();
+        }
+        if (level > 2 || boost.level >= level) {
+            revert InvalidBoostLevel(level);
+        }
+
+        BoostLevel memory stakingLevel = $.boostLevels[level];
+        uint256 amountDiff = stakingLevel.amount - $.boostLevels[boost.level].amount;
+        require(IERC20($.dimoToken).transferFrom(msg.sender, address(this), amountDiff), 'Transfer failed');
+
+        // try
+        // Boost storage boost = $.userBoosts[msg.sender];
+        // boost.level = level;
+        // boost.amount = stakingLevel.amount;
+        // boost.lockEndTime = block.timestamp + stakingLevel.lockPeriod;
+        // boost.attachedVehicleId = vehicleId;
+        // boost.autoRenew = autoRenew;
+
+        uint256 currentAttachedVehicleId = boost.attachedVehicleId;
+
+        $.userBoosts[msg.sender] = Boost({
+            level: level,
+            amount: stakingLevel.amount,
+            lockEndTime: block.timestamp + stakingLevel.lockPeriod,
+            attachedVehicleId: vehicleId,
+            autoRenew: autoRenew
+        });
+
+        emit Staked(msg.sender, stakingLevel.amount, level, $.userBoosts[msg.sender].lockEndTime);
+
+        if (vehicleId != currentAttachedVehicleId) {
+            // TODO Should the user able to detach here?
+            if (vehicleId == 0) {
+                emit BoostDetached(msg.sender, vehicleId);
+            } else {
+                try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
+                    if (vehicleIdOwner != msg.sender) {
+                        revert Unauthorized(msg.sender);
+                    }
+                    emit BoostAttached(msg.sender, vehicleId);
+                } catch {
+                    revert InvalidVehicleId(vehicleId);
+                }
+            }
+        }
+    }
+
+    // TODO Documentation
+    function withdraw() external nonReentrant {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
         Boost storage boost = $.userBoosts[msg.sender];
-        if (boost.amount <= 0) {
+        if (boost.amount == 0) {
             revert NoActiveBoost();
         }
         if (block.timestamp < boost.lockEndTime) {
@@ -127,7 +183,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         uint256 amount = boost.amount;
         delete $.userBoosts[msg.sender];
 
-        require($.dimoToken.transfer(msg.sender, amount), 'Transfer failed');
+        require(IERC20($.dimoToken).transfer(msg.sender, amount), 'Transfer failed');
         emit Withdrawn(msg.sender, amount);
     }
 
@@ -136,7 +192,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
         Boost storage boost = $.userBoosts[msg.sender];
-        if (boost.amount <= 0) {
+        if (boost.amount == 0) {
             revert NoActiveBoost();
         }
 
@@ -150,14 +206,14 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     function attachBoost(uint256 vehicleId) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        try $.vehicleIdProxy.ownerOf(vehicleId) returns (address vehicleIdOwner) {
+        try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
             if (vehicleIdOwner != msg.sender) {
                 revert Unauthorized(msg.sender);
             }
 
             Boost storage boost = $.userBoosts[msg.sender];
 
-            if (boost.amount <= 0) {
+            if (boost.amount == 0) {
                 revert NoActiveBoost();
             }
             if (boost.attachedVehicleId != 0) {
@@ -190,6 +246,26 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     // TODO Documentation
     function setAutoRenew(bool autoRenew) external {
         _getDimoStakingStorage().userBoosts[msg.sender].autoRenew = autoRenew;
+    }
+
+    // TODO Documentation
+    function dimoToken() external view returns (address) {
+        return _getDimoStakingStorage().dimoToken;
+    }
+
+    // TODO Documentation
+    function vehicleIdProxy() external view returns (address) {
+        return _getDimoStakingStorage().vehicleIdProxy;
+    }
+
+    // TODO Documentation
+    function userBoosts(address user) external view returns (Boost memory) {
+        return _getDimoStakingStorage().userBoosts[user];
+    }
+
+    // TODO Documentation
+    function boostLevels(uint256 level) external view returns (BoostLevel memory) {
+        return _getDimoStakingStorage().boostLevels[level];
     }
 
     // TODO Documentation
