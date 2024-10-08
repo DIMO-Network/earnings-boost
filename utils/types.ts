@@ -1,13 +1,13 @@
 export type Boost = {
-    level: BigInt
-    amount: BigInt
-    lockEndTime: BigInt
-    attachedVehicleId: BigInt
+    level: bigint
+    amount: bigint
+    lockEndTime: bigint
+    attachedVehicleId: bigint
     autoRenew: boolean
 }
 
 export type BoostLevel = {
-    amount: BigInt
-    lockPeriod: BigInt
-    points: BigInt
+    amount: bigint
+    lockPeriod: bigint
+    points: bigint
 }

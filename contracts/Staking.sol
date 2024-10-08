@@ -127,14 +127,6 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         uint256 amountDiff = stakingLevel.amount - $.boostLevels[boost.level].amount;
         require(IERC20($.dimoToken).transferFrom(msg.sender, address(this), amountDiff), 'Transfer failed');
 
-        // try
-        // Boost storage boost = $.userBoosts[msg.sender];
-        // boost.level = level;
-        // boost.amount = stakingLevel.amount;
-        // boost.lockEndTime = block.timestamp + stakingLevel.lockPeriod;
-        // boost.attachedVehicleId = vehicleId;
-        // boost.autoRenew = autoRenew;
-
         uint256 currentAttachedVehicleId = boost.attachedVehicleId;
 
         $.userBoosts[msg.sender] = Boost({
@@ -179,6 +171,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         if (boost.autoRenew) {
             revert AutoRenewActive();
         }
+        // TODO Should dettach vehicle?
 
         uint256 amount = boost.amount;
         delete $.userBoosts[msg.sender];
@@ -203,7 +196,8 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function attachBoost(uint256 vehicleId) external {
+    function attachVehicle(uint256 vehicleId) external {
+        // TODO handle vehicle ID transfer
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
         try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
@@ -216,6 +210,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             if (boost.amount == 0) {
                 revert NoActiveBoost();
             }
+            // TODO Should we let the user reattach?
             if (boost.attachedVehicleId != 0) {
                 revert BoostAlreadyAttached();
             }
@@ -229,7 +224,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function detachBoost() external {
+    function detachVehicle() external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
         Boost storage boost = $.userBoosts[msg.sender];
@@ -238,7 +233,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         }
 
         uint256 vehicleId = boost.attachedVehicleId;
-        boost.attachedVehicleId = 0;
+        delete boost.attachedVehicleId;
 
         emit BoostDetached(msg.sender, vehicleId);
     }
