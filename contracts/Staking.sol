@@ -8,18 +8,23 @@ import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
 
+import './Boost.sol';
+import './Types.sol';
+import './interfaces/IBoost.sol';
+
 contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
     struct DimoStakingStorage {
         address dimoToken;
         address vehicleIdProxy;
-        mapping(address => Boost) userBoosts;
+        address boost;
+        mapping(address => address) userBoosts;
+        // TODO Maybe we should ignore the level, it does not mean much
         mapping(uint256 => BoostLevel) boostLevels;
     }
-    struct Boost {
+    struct StakeInput {
+        address beneficiary;
         uint256 level;
-        uint256 amount;
-        uint256 lockEndTime;
-        uint256 attachedVehicleId;
+        uint256 vehicleId;
         bool autoRenew;
     }
     struct BoostLevel {
@@ -34,7 +39,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     // keccak256(abi.encode(uint256(keccak256("DIMOStaking.storage")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant DIMO_STAKING_STORAGE = 0x85da7fe116410007e8db80000b74f31d3498f18fcacb661af6fab05d889a7100;
 
-    event Staked(address indexed user, uint256 amount, uint256 level, uint256 lockEndTime);
+    event Staked(address indexed user, address indexed boost, uint256 amount, uint256 level, uint256 lockEndTime);
     event Withdrawn(address indexed user, uint256 amount);
     event BoostAttached(address indexed user, uint256 indexed vehicleId);
     event BoostDetached(address indexed user, uint256 indexed vehicleId);
@@ -56,7 +61,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function initialize(address dimoToken_, address vehicleIdProxy_) external initializer {
+    function initialize(address dimoToken_, address vehicleIdProxy_, address boost_) external initializer {
         __AccessControl_init();
         __UUPSUpgradeable_init();
         __ReentrancyGuard_init();
@@ -67,6 +72,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
         $.dimoToken = dimoToken_;
         $.vehicleIdProxy = vehicleIdProxy_;
+        $.boost = boost_;
 
         // Initialize boost levels
         $.boostLevels[0] = BoostLevel(5000 ether, 180 days, 1000);
@@ -75,37 +81,45 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function stake(uint256 level, uint256 vehicleId, bool autoRenew) external {
+    function stake(StakeInput calldata stakeInput) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        if ($.userBoosts[msg.sender].amount > 0) {
-            revert UserAlreadyHasBoost(msg.sender);
-        }
-        if (level > 2) {
-            revert InvalidBoostLevel(level);
+        if (stakeInput.level > 2) {
+            revert InvalidBoostLevel(stakeInput.level);
         }
 
-        BoostLevel memory stakingLevel = $.boostLevels[level];
-        require(IERC20($.dimoToken).transferFrom(msg.sender, address(this), stakingLevel.amount), 'Transfer failed');
-
-        $.userBoosts[msg.sender] = Boost({
-            level: level,
-            amount: stakingLevel.amount,
-            lockEndTime: block.timestamp + stakingLevel.lockPeriod,
-            attachedVehicleId: vehicleId,
-            autoRenew: autoRenew
+        BoostLevel memory boostLevel = $.boostLevels[stakeInput.level];
+        BoostData memory boostData = BoostData({
+            level: stakeInput.level,
+            amount: boostLevel.amount,
+            lockEndTime: block.timestamp + boostLevel.lockPeriod,
+            vehicleId: stakeInput.vehicleId,
+            autoRenew: stakeInput.autoRenew
         });
 
-        emit Staked(msg.sender, stakingLevel.amount, level, $.userBoosts[msg.sender].lockEndTime);
+        address boost = $.userBoosts[msg.sender];
+        if (boost != address(0)) {
+            BoostData memory currentBoostData = IBoost(boost).boostData();
 
-        if (vehicleId != 0) {
-            try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
-                if (vehicleIdOwner != msg.sender) {
-                    revert Unauthorized(msg.sender);
+            if (currentBoostData.amount > 0) {
+                revert UserAlreadyHasBoost(msg.sender);
+            }
+        } else {
+            boost = address(new Boost($.dimoToken, $.vehicleIdProxy, stakeInput.beneficiary, boostData));
+        }
+
+        require(IERC20($.dimoToken).transferFrom(msg.sender, boost, boostLevel.amount), 'Transfer failed');
+
+        emit Staked(msg.sender, boost, boostLevel.amount, stakeInput.level, boostData.lockEndTime);
+
+        if (stakeInput.vehicleId != 0) {
+            try IERC721($.vehicleIdProxy).ownerOf(stakeInput.vehicleId) returns (address vehicleIdOwner) {
+                if (vehicleIdOwner != stakeInput.beneficiary) {
+                    revert Unauthorized(stakeInput.beneficiary);
                 }
-                emit BoostAttached(msg.sender, vehicleId);
+                emit BoostAttached(stakeInput.beneficiary, boostData.vehicleId);
             } catch {
-                revert InvalidVehicleId(vehicleId);
+                revert InvalidVehicleId(stakeInput.vehicleId);
             }
         }
     }
@@ -114,35 +128,39 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     function upgradeStake(uint256 level, uint256 vehicleId, bool autoRenew) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        Boost memory boost = $.userBoosts[msg.sender];
-
-        if (boost.amount == 0) {
+        if ($.userBoosts[msg.sender] == address(0)) {
             revert NoActiveBoost();
         }
-        if (level > 2 || boost.level >= level) {
+
+        IBoost boost = IBoost($.userBoosts[msg.sender]);
+        BoostData memory currentBoostData = boost.boostData();
+
+        if (level > 2 || currentBoostData.level >= level) {
             revert InvalidBoostLevel(level);
         }
 
         BoostLevel memory stakingLevel = $.boostLevels[level];
-        uint256 amountDiff = stakingLevel.amount - $.boostLevels[boost.level].amount;
+        uint256 amountDiff = stakingLevel.amount - $.boostLevels[currentBoostData.level].amount;
         require(IERC20($.dimoToken).transferFrom(msg.sender, address(this), amountDiff), 'Transfer failed');
 
-        uint256 currentAttachedVehicleId = boost.attachedVehicleId;
+        uint256 currentAttachedVehicleId = currentBoostData.vehicleId;
 
-        $.userBoosts[msg.sender] = Boost({
+        BoostData memory newBoostData = BoostData({
             level: level,
             amount: stakingLevel.amount,
             lockEndTime: block.timestamp + stakingLevel.lockPeriod,
-            attachedVehicleId: vehicleId,
+            vehicleId: vehicleId,
             autoRenew: autoRenew
         });
 
-        emit Staked(msg.sender, stakingLevel.amount, level, $.userBoosts[msg.sender].lockEndTime);
+        boost.setBoostData(newBoostData);
+
+        emit Staked(msg.sender, address(boost), newBoostData.amount, level, newBoostData.lockEndTime);
 
         if (vehicleId != currentAttachedVehicleId) {
             // TODO Should the user able to detach here?
             if (vehicleId == 0) {
-                emit BoostDetached(msg.sender, vehicleId);
+                emit BoostDetached(msg.sender, currentAttachedVehicleId);
             } else {
                 try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
                     if (vehicleIdOwner != msg.sender) {
@@ -160,39 +178,38 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     function withdraw() external nonReentrant {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        Boost storage boost = $.userBoosts[msg.sender];
-        if (boost.amount == 0) {
+        if ($.userBoosts[msg.sender] == address(0)) {
             revert NoActiveBoost();
         }
-        if (block.timestamp < boost.lockEndTime) {
-            revert TokensStillLocked();
-        }
-        // TODO Do we need this?
-        if (boost.autoRenew) {
-            revert AutoRenewActive();
-        }
-        // TODO Should dettach vehicle?
 
-        uint256 amount = boost.amount;
-        delete $.userBoosts[msg.sender];
+        IBoost boost = IBoost($.userBoosts[msg.sender]);
+        BoostData memory currentBoostData = boost.boostData();
 
-        require(IERC20($.dimoToken).transfer(msg.sender, amount), 'Transfer failed');
-        emit Withdrawn(msg.sender, amount);
+        if (currentBoostData.vehicleId != 0) {
+            emit BoostDetached(msg.sender, currentBoostData.vehicleId);
+        }
+
+        uint256 amountWithdrawn = boost.withdraw();
+
+        emit Withdrawn(msg.sender, amountWithdrawn);
     }
 
     // TODO Documentation
     function extendBoost() external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        Boost storage boost = $.userBoosts[msg.sender];
-        if (boost.amount == 0) {
+        if ($.userBoosts[msg.sender] == address(0)) {
             revert NoActiveBoost();
         }
 
-        BoostLevel memory level = $.boostLevels[boost.level];
-        boost.lockEndTime = block.timestamp + level.lockPeriod;
+        IBoost boost = IBoost($.userBoosts[msg.sender]);
+        BoostData memory currentBoostData = boost.boostData();
 
-        emit BoostExtended(msg.sender, boost.lockEndTime);
+        uint256 newLockEndTime = block.timestamp + $.boostLevels[currentBoostData.level].lockPeriod;
+
+        boost.extendBoost(newLockEndTime);
+
+        emit BoostExtended(msg.sender, newLockEndTime);
     }
 
     // TODO Documentation
@@ -205,17 +222,11 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
                 revert Unauthorized(msg.sender);
             }
 
-            Boost storage boost = $.userBoosts[msg.sender];
-
-            if (boost.amount == 0) {
+            if ($.userBoosts[msg.sender] == address(0)) {
                 revert NoActiveBoost();
             }
-            // TODO Should we let the user reattach?
-            if (boost.attachedVehicleId != 0) {
-                revert BoostAlreadyAttached();
-            }
 
-            boost.attachedVehicleId = vehicleId;
+            IBoost($.userBoosts[msg.sender]).attachVehicle(vehicleId);
 
             emit BoostAttached(msg.sender, vehicleId);
         } catch {
@@ -227,20 +238,35 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     function detachVehicle() external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        Boost storage boost = $.userBoosts[msg.sender];
-        if (boost.attachedVehicleId == 0) {
-            revert NoVehicleAttached();
+        if ($.userBoosts[msg.sender] == address(0)) {
+            revert NoActiveBoost();
         }
 
-        uint256 vehicleId = boost.attachedVehicleId;
-        delete boost.attachedVehicleId;
+        uint256 detachedVehicle = IBoost($.userBoosts[msg.sender]).detachVehicle();
 
-        emit BoostDetached(msg.sender, vehicleId);
+        emit BoostDetached(msg.sender, detachedVehicle);
     }
 
     // TODO Documentation
     function setAutoRenew(bool autoRenew) external {
-        _getDimoStakingStorage().userBoosts[msg.sender].autoRenew = autoRenew;
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+
+        if ($.userBoosts[msg.sender] == address(0)) {
+            revert NoActiveBoost();
+        }
+
+        IBoost($.userBoosts[msg.sender]).setAutoRenew(autoRenew);
+    }
+
+    // TODO Documentation
+    function delegate(address delegatee) external {
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+
+        if ($.userBoosts[msg.sender] == address(0)) {
+            revert NoActiveBoost();
+        }
+
+        IBoost($.userBoosts[msg.sender]).delegate(delegatee);
     }
 
     // TODO Documentation
@@ -254,7 +280,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function userBoosts(address user) external view returns (Boost memory) {
+    function userBoosts(address user) external view returns (address) {
         return _getDimoStakingStorage().userBoosts[user];
     }
 
@@ -264,30 +290,19 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function getBoostLevel(address user) external view returns (uint256) {
-        return _getDimoStakingStorage().userBoosts[user].level;
-    }
-
-    // TODO Documentation
-    function getAttachedVehicle(address user) external view returns (uint256) {
-        return _getDimoStakingStorage().userBoosts[user].attachedVehicleId;
-    }
-
-    // TODO Documentation
-    function getLockEndTime(address user) external view returns (uint256) {
-        return _getDimoStakingStorage().userBoosts[user].lockEndTime;
-    }
-
-    // TODO Documentation
     function getBoostPoints(address user) external view returns (uint256) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        Boost memory boost = $.userBoosts[user];
+        if ($.userBoosts[user] == address(0)) {
+            return 0;
+        }
 
-        if (boost.amount == 0) return 0;
-        if (boost.lockEndTime < block.timestamp && !boost.autoRenew) return 0;
+        BoostData memory currentBoostData = IBoost($.userBoosts[user]).boostData();
 
-        return $.boostLevels[boost.level].points;
+        if (currentBoostData.amount == 0) return 0;
+        if (currentBoostData.lockEndTime < block.timestamp && !currentBoostData.autoRenew) return 0;
+
+        return $.boostLevels[currentBoostData.level].points;
     }
 
     // TODO Documentation
