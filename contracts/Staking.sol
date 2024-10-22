@@ -25,7 +25,6 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         address beneficiary;
         uint256 level;
         uint256 vehicleId;
-        bool autoRenew;
     }
     struct BoostLevel {
         uint256 amount;
@@ -48,7 +47,6 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     error InvalidBoostLevel(uint256 level);
     error UserAlreadyHasBoost(address user);
     error TokensStillLocked();
-    error AutoRenewActive();
     error Unauthorized(address addr);
     error InvalidVehicleId(uint256 vehicleId);
     error NoActiveBoost();
@@ -93,8 +91,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             level: stakeInput.level,
             amount: boostLevel.amount,
             lockEndTime: block.timestamp + boostLevel.lockPeriod,
-            vehicleId: stakeInput.vehicleId,
-            autoRenew: stakeInput.autoRenew
+            vehicleId: stakeInput.vehicleId
         });
 
         address boost = $.userBoosts[msg.sender];
@@ -127,7 +124,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function upgradeStake(uint256 level, uint256 vehicleId, bool autoRenew) external {
+    function upgradeStake(uint256 level, uint256 vehicleId) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
         if ($.userBoosts[msg.sender] == address(0)) {
@@ -151,8 +148,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             level: level,
             amount: stakingLevel.amount,
             lockEndTime: block.timestamp + stakingLevel.lockPeriod,
-            vehicleId: vehicleId,
-            autoRenew: autoRenew
+            vehicleId: vehicleId
         });
 
         boost.setBoostData(newBoostData);
@@ -250,17 +246,6 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function setAutoRenew(bool autoRenew) external {
-        DimoStakingStorage storage $ = _getDimoStakingStorage();
-
-        if ($.userBoosts[msg.sender] == address(0)) {
-            revert NoActiveBoost();
-        }
-
-        IBoost($.userBoosts[msg.sender]).setAutoRenew(autoRenew);
-    }
-
-    // TODO Documentation
     function delegate(address delegatee) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
@@ -302,7 +287,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         BoostData memory currentBoostData = IBoost($.userBoosts[user]).boostData();
 
         if (currentBoostData.amount == 0) return 0;
-        if (currentBoostData.lockEndTime < block.timestamp && !currentBoostData.autoRenew) return 0;
+        if (currentBoostData.lockEndTime < block.timestamp) return 0;
 
         return $.boostLevels[currentBoostData.level].points;
     }
