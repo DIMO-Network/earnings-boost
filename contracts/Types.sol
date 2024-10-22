@@ -6,5 +6,4 @@ struct BoostData {
     uint256 amount;
     uint256 lockEndTime;
     uint256 vehicleId;
-    bool autoRenew;
 }

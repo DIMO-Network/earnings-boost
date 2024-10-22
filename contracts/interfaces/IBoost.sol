@@ -14,8 +14,6 @@ interface IBoost {
 
     function detachVehicle() external returns (uint256);
 
-    function setAutoRenew(bool autoRenew) external;
-
     function delegate(address delegatee) external;
 
     function boostData() external view returns (BoostData memory);

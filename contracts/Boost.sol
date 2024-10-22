@@ -15,7 +15,6 @@ contract Boost {
     BoostData public boostData;
 
     error TokensStillLocked();
-    error AutoRenewActive();
     error Unauthorized(address addr);
     error NoActiveBoost();
     error NoVehicleAttached();
@@ -49,10 +48,6 @@ contract Boost {
         }
         if (block.timestamp < boostData.lockEndTime) {
             revert TokensStillLocked();
-        }
-        // TODO Do we need this?
-        if (boostData.autoRenew) {
-            revert AutoRenewActive();
         }
 
         amountWithdrawn = boostData.amount;
@@ -91,15 +86,6 @@ contract Boost {
 
         detachedVehicle = boostData.vehicleId;
         delete boostData.vehicleId;
-    }
-
-    // TODO Documentation
-    function setAutoRenew(bool autoRenew) external onlyDimoStaking {
-        if (boostData.amount == 0) {
-            revert NoActiveBoost();
-        }
-
-        boostData.autoRenew = autoRenew;
     }
 
     // TODO Documentation
