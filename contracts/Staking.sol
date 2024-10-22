@@ -47,7 +47,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     error InvalidBoostLevel(uint256 level);
     error UserAlreadyHasBoost(address user);
     error TokensStillLocked();
-    error Unauthorized(address addr);
+    error Unauthorized(address addr, uint256 vehicleId);
     error InvalidVehicleId(uint256 vehicleId);
     error NoActiveBoost();
     error BoostAlreadyAttached();
@@ -114,7 +114,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         if (stakeInput.vehicleId != 0) {
             try IERC721($.vehicleIdProxy).ownerOf(stakeInput.vehicleId) returns (address vehicleIdOwner) {
                 if (vehicleIdOwner != stakeInput.beneficiary) {
-                    revert Unauthorized(stakeInput.beneficiary);
+                    revert Unauthorized(stakeInput.beneficiary, stakeInput.vehicleId);
                 }
                 emit BoostAttached(stakeInput.beneficiary, boostData.vehicleId);
             } catch {
@@ -162,7 +162,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             } else {
                 try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
                     if (vehicleIdOwner != msg.sender) {
-                        revert Unauthorized(msg.sender);
+                        revert Unauthorized(msg.sender, vehicleId);
                     }
                     emit BoostAttached(msg.sender, vehicleId);
                 } catch {
@@ -217,7 +217,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
         try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
             if (vehicleIdOwner != msg.sender) {
-                revert Unauthorized(msg.sender);
+                revert Unauthorized(msg.sender, vehicleId);
             }
 
             if ($.userBoosts[msg.sender] == address(0)) {
