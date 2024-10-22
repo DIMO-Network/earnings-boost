@@ -75,9 +75,9 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         $.boost = boost_;
 
         // Initialize boost levels
-        $.boostLevels[0] = BoostLevel(5000 ether, 180 days, 1000);
-        $.boostLevels[1] = BoostLevel(10000 ether, 365 days, 2000);
-        $.boostLevels[2] = BoostLevel(15000 ether, 730 days, 3000);
+        $.boostLevels[0] = BoostLevel(500 ether, 180 days, 1000);
+        $.boostLevels[1] = BoostLevel(1500 ether, 365 days, 2000);
+        $.boostLevels[2] = BoostLevel(4000 ether, 730 days, 3000);
     }
 
     // TODO Documentation
