@@ -104,6 +104,8 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             if (currentBoostData.amount > 0) {
                 revert UserAlreadyHasBoost(msg.sender);
             }
+
+            IBoost(boost).setBoostData(boostData);
         } else {
             boost = address(new Boost($.dimoToken, $.vehicleIdProxy, stakeInput.beneficiary, boostData));
         }
