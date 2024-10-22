@@ -16,7 +16,6 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     struct DimoStakingStorage {
         address dimoToken;
         address vehicleIdProxy;
-        address boost;
         mapping(address => address) userBoosts;
         // TODO Maybe we should ignore the level, it does not mean much
         mapping(uint256 => BoostLevel) boostLevels;
@@ -59,7 +58,7 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function initialize(address dimoToken_, address vehicleIdProxy_, address boost_) external initializer {
+    function initialize(address dimoToken_, address vehicleIdProxy_) external initializer {
         __AccessControl_init();
         __UUPSUpgradeable_init();
         __ReentrancyGuard_init();
@@ -70,7 +69,6 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
         $.dimoToken = dimoToken_;
         $.vehicleIdProxy = vehicleIdProxy_;
-        $.boost = boost_;
 
         // Initialize boost levels
         $.boostLevels[0] = BoostLevel(500 ether, 180 days, 1000);
