@@ -6,26 +6,25 @@ import '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
-import '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol';
 
-import './Boost.sol';
+import './StakingBeacon.sol';
 import './Types.sol';
-import './interfaces/IBoost.sol';
+import './interfaces/IStakingBeacon.sol';
 
-contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
+contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     struct DimoStakingStorage {
         address dimoToken;
         address vehicleIdProxy;
-        mapping(address => address) userBoosts;
+        uint256 currentStakeId;
         // TODO Maybe we should ignore the level, it does not mean much
-        mapping(uint256 => BoostLevel) boostLevels;
+        mapping(uint256 => StakingLevel) stakingLevels;
+        // TODO I am not really using this mapping now, should remove?
+        mapping(uint256 stakeId => address stakerContract) stakeIdToStake;
+        mapping(address staker => address stakerContract) stakerToStake;
+        mapping(uint256 vehicleTokenId => address stakerContract) vehicleIdToStake;
     }
-    struct StakeInput {
-        address beneficiary;
-        uint256 level;
-        uint256 vehicleId;
-    }
-    struct BoostLevel {
+    struct StakingLevel {
         uint256 amount;
         uint256 lockPeriod;
         uint256 points;
@@ -37,20 +36,25 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     // keccak256(abi.encode(uint256(keccak256("DIMOStaking.storage")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant DIMO_STAKING_STORAGE = 0x85da7fe116410007e8db80000b74f31d3498f18fcacb661af6fab05d889a7100;
 
-    event Staked(address indexed user, address indexed boost, uint256 amount, uint256 level, uint256 lockEndTime);
-    event Withdrawn(address indexed user, uint256 amount);
-    event BoostAttached(address indexed user, uint256 indexed vehicleId);
-    event BoostDetached(address indexed user, uint256 indexed vehicleId);
-    event BoostExtended(address indexed user, uint256 newLockEndTime);
+    event Staked(
+        address indexed user,
+        uint256 indexed stakeId,
+        address indexed stakingBeacon,
+        uint256 amount,
+        uint256 level,
+        uint256 lockEndTime
+    );
+    event Withdrawn(address indexed user, uint256 indexed stakeId, uint256 amount);
+    event VehicleAttached(address indexed user, uint256 indexed stakeId, uint256 indexed vehicleId);
+    event VehicleDetached(address indexed user, uint256 indexed stakeId, uint256 indexed vehicleId);
+    event StakingExtended(address indexed user, uint256 indexed stakeId, uint256 newLockEndTime);
 
-    error InvalidBoostLevel(uint256 level);
-    error UserAlreadyHasBoost(address user);
-    error TokensStillLocked();
+    error InvalidStakingLevel(uint256 level);
+    error TokensStillLocked(uint256 stakeId);
     error Unauthorized(address addr, uint256 vehicleId);
     error InvalidVehicleId(uint256 vehicleId);
-    error NoActiveBoost();
-    error BoostAlreadyAttached();
-    error NoVehicleAttached();
+    error NoActiveStaking(address user);
+    error vehicleAlreadyAttached(uint256 vehicleId);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -60,8 +64,8 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     // TODO Documentation
     function initialize(address dimoToken_, address vehicleIdProxy_) external initializer {
         __AccessControl_init();
+        __ERC721_init('DIMO Staking', 'DSTK');
         __UUPSUpgradeable_init();
-        __ReentrancyGuard_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
@@ -70,99 +74,119 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         $.dimoToken = dimoToken_;
         $.vehicleIdProxy = vehicleIdProxy_;
 
-        // Initialize boost levels
-        $.boostLevels[0] = BoostLevel(500 ether, 180 days, 1000);
-        $.boostLevels[1] = BoostLevel(1500 ether, 365 days, 2000);
-        $.boostLevels[2] = BoostLevel(4000 ether, 730 days, 3000);
+        // Initialize staking levels
+        $.stakingLevels[0] = StakingLevel(500 ether, 180 days, 1000);
+        $.stakingLevels[1] = StakingLevel(1500 ether, 365 days, 2000);
+        $.stakingLevels[2] = StakingLevel(4000 ether, 730 days, 3000);
     }
 
     // TODO Documentation
-    function stake(StakeInput calldata stakeInput) external {
+    // If staker has no StakingBeacon, create one and a stake ID. Otherwise, just a new stake ID
+    function stake(uint256 level, uint256 vehicleId) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        if (stakeInput.level > 2) {
-            revert InvalidBoostLevel(stakeInput.level);
+        if (level > 2) {
+            revert InvalidStakingLevel(level);
         }
 
-        BoostLevel memory boostLevel = $.boostLevels[stakeInput.level];
-        BoostData memory boostData = BoostData({
-            level: stakeInput.level,
-            amount: boostLevel.amount,
-            lockEndTime: block.timestamp + boostLevel.lockPeriod,
-            vehicleId: stakeInput.vehicleId
-        });
-
-        address boost = $.userBoosts[msg.sender];
-        if (boost != address(0)) {
-            BoostData memory currentBoostData = IBoost(boost).boostData();
-
-            if (currentBoostData.amount > 0) {
-                revert UserAlreadyHasBoost(msg.sender);
-            }
-
-            IBoost(boost).setBoostData(boostData);
-        } else {
-            boost = address(new Boost($.dimoToken, $.vehicleIdProxy, stakeInput.beneficiary, boostData));
-        }
-
-        require(IERC20($.dimoToken).transferFrom(msg.sender, boost, boostLevel.amount), 'Transfer failed');
-
-        emit Staked(msg.sender, boost, boostLevel.amount, stakeInput.level, boostData.lockEndTime);
-
-        if (stakeInput.vehicleId != 0) {
-            try IERC721($.vehicleIdProxy).ownerOf(stakeInput.vehicleId) returns (address vehicleIdOwner) {
-                if (vehicleIdOwner != stakeInput.beneficiary) {
-                    revert Unauthorized(stakeInput.beneficiary, stakeInput.vehicleId);
-                }
-                emit BoostAttached(stakeInput.beneficiary, boostData.vehicleId);
-            } catch {
-                revert InvalidVehicleId(stakeInput.vehicleId);
-            }
-        }
-    }
-
-    // TODO Documentation
-    function upgradeStake(uint256 level, uint256 vehicleId) external {
-        DimoStakingStorage storage $ = _getDimoStakingStorage();
-
-        if ($.userBoosts[msg.sender] == address(0)) {
-            revert NoActiveBoost();
-        }
-
-        IBoost boost = IBoost($.userBoosts[msg.sender]);
-        BoostData memory currentBoostData = boost.boostData();
-
-        if (level > 2 || currentBoostData.level >= level) {
-            revert InvalidBoostLevel(level);
-        }
-
-        BoostLevel memory stakingLevel = $.boostLevels[level];
-        uint256 amountDiff = stakingLevel.amount - $.boostLevels[currentBoostData.level].amount;
-        require(IERC20($.dimoToken).transferFrom(msg.sender, address(this), amountDiff), 'Transfer failed');
-
-        uint256 currentAttachedVehicleId = currentBoostData.vehicleId;
-
-        BoostData memory newBoostData = BoostData({
+        uint256 currentStakeId = ++$.currentStakeId;
+        StakingLevel memory stakingLevel = $.stakingLevels[level];
+        StakingData memory stakingData = StakingData({
             level: level,
             amount: stakingLevel.amount,
             lockEndTime: block.timestamp + stakingLevel.lockPeriod,
             vehicleId: vehicleId
         });
 
-        boost.setBoostData(newBoostData);
+        address stakingBeaconAddress = $.stakerToStake[msg.sender];
+        if (stakingBeaconAddress == address(0)) {
+            // Creates a new StakingBeacon
+            stakingBeaconAddress = address(
+                new StakingBeacon($.dimoToken, $.vehicleIdProxy, msg.sender, currentStakeId, stakingData)
+            );
 
-        emit Staked(msg.sender, address(boost), newBoostData.amount, level, newBoostData.lockEndTime);
+            $.stakerToStake[msg.sender] = stakingBeaconAddress;
+        } else {
+            // Creates a stakeId in an existing StakingBeacon
+            IStakingBeacon(stakingBeaconAddress).setStakingData(currentStakeId, stakingData);
+        }
+
+        $.stakeIdToStake[currentStakeId] = stakingBeaconAddress;
+
+        require(
+            IERC20($.dimoToken).transferFrom(msg.sender, stakingBeaconAddress, stakingLevel.amount),
+            'Transfer failed'
+        );
+
+        emit Staked(
+            msg.sender,
+            currentStakeId,
+            stakingBeaconAddress,
+            stakingLevel.amount,
+            level,
+            stakingData.lockEndTime
+        );
+
+        if (vehicleId != 0) {
+            if ($.vehicleIdToStake[vehicleId] != address(0)) {
+                revert vehicleAlreadyAttached(vehicleId);
+            }
+            try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
+                if (msg.sender != vehicleIdOwner) {
+                    revert Unauthorized(msg.sender, vehicleId);
+                }
+                $.vehicleIdToStake[stakingData.vehicleId] = stakingBeaconAddress;
+                emit VehicleAttached(msg.sender, currentStakeId, stakingData.vehicleId);
+            } catch {
+                revert InvalidVehicleId(vehicleId);
+            }
+        }
+    }
+
+    // TODO Documentation
+    function upgradeStake(uint256 stakeId, uint256 level, uint256 vehicleId) external {
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+        IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
+
+        if (address(staking) == address(0)) {
+            revert NoActiveStaking(msg.sender);
+        }
+
+        StakingData memory stakingData = staking.stakingData(stakeId);
+
+        if (level > 2 || stakingData.level >= level) {
+            revert InvalidStakingLevel(level);
+        }
+
+        StakingLevel memory stakingLevel = $.stakingLevels[level];
+        uint256 amountDiff = stakingLevel.amount - $.stakingLevels[stakingData.level].amount;
+        require(IERC20($.dimoToken).transferFrom(msg.sender, address(staking), amountDiff), 'Transfer failed');
+
+        uint256 currentAttachedVehicleId = stakingData.vehicleId;
+
+        StakingData memory newStakingData = StakingData({
+            level: level,
+            amount: stakingLevel.amount,
+            lockEndTime: block.timestamp + stakingLevel.lockPeriod,
+            vehicleId: vehicleId
+        });
+
+        staking.setStakingData(stakeId, newStakingData);
+
+        emit Staked(msg.sender, stakeId, address(staking), newStakingData.amount, level, newStakingData.lockEndTime);
 
         if (vehicleId != currentAttachedVehicleId) {
-            // TODO Should the user able to detach here?
+            if ($.vehicleIdToStake[vehicleId] != address(0)) {
+                revert vehicleAlreadyAttached(vehicleId);
+            }
             if (vehicleId == 0) {
-                emit BoostDetached(msg.sender, currentAttachedVehicleId);
+                emit VehicleDetached(msg.sender, stakeId, currentAttachedVehicleId);
             } else {
                 try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
                     if (vehicleIdOwner != msg.sender) {
                         revert Unauthorized(msg.sender, vehicleId);
                     }
-                    emit BoostAttached(msg.sender, vehicleId);
+                    emit VehicleAttached(msg.sender, stakeId, vehicleId);
                 } catch {
                     revert InvalidVehicleId(vehicleId);
                 }
@@ -171,87 +195,140 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function withdraw() external nonReentrant {
-        DimoStakingStorage storage $ = _getDimoStakingStorage();
+    function withdraw(uint256 stakeId) external {
+        IStakingBeacon staking = IStakingBeacon(_getDimoStakingStorage().stakerToStake[msg.sender]);
 
-        if ($.userBoosts[msg.sender] == address(0)) {
-            revert NoActiveBoost();
+        if (address(staking) == address(0)) {
+            revert NoActiveStaking(msg.sender);
         }
 
-        IBoost boost = IBoost($.userBoosts[msg.sender]);
-        BoostData memory currentBoostData = boost.boostData();
+        StakingData memory stakingData = staking.stakingData(stakeId);
 
-        if (currentBoostData.vehicleId != 0) {
-            emit BoostDetached(msg.sender, currentBoostData.vehicleId);
+        if (stakingData.amount == 0) {
+            revert();
+            // revert NoActiveStaking(stakeId); // TODO Change revert params
+        }
+        if (block.timestamp < stakingData.lockEndTime) {
+            revert TokensStillLocked(stakeId);
+        }
+        if (stakingData.vehicleId != 0) {
+            emit VehicleDetached(msg.sender, stakeId, stakingData.vehicleId);
         }
 
-        uint256 amountWithdrawn = boost.withdraw();
+        uint256 amountWithdrawn = staking.withdraw(stakeId);
 
-        emit Withdrawn(msg.sender, amountWithdrawn);
+        emit Withdrawn(msg.sender, stakeId, amountWithdrawn);
     }
 
     // TODO Documentation
-    function extendBoost() external {
-        DimoStakingStorage storage $ = _getDimoStakingStorage();
+    function withdraw(uint256[] calldata stakeIds) external {
+        IStakingBeacon staking = IStakingBeacon(_getDimoStakingStorage().stakerToStake[msg.sender]);
 
-        if ($.userBoosts[msg.sender] == address(0)) {
-            revert NoActiveBoost();
+        if (address(staking) == address(0)) {
+            revert NoActiveStaking(msg.sender);
         }
 
-        IBoost boost = IBoost($.userBoosts[msg.sender]);
-        BoostData memory currentBoostData = boost.boostData();
+        uint256 stakeId;
+        uint256 amountWithdrawn;
+        StakingData memory stakingData;
+        for (uint256 i = 0; i < stakeIds.length; i++) {
+            stakeId = stakeIds[i];
+            stakingData = staking.stakingData(stakeId);
 
-        uint256 newLockEndTime = block.timestamp + $.boostLevels[currentBoostData.level].lockPeriod;
+            if (stakingData.amount == 0) {
+                revert();
+                // revert NoActiveStaking(stakeId); // TODO Change revert params
+            }
+            if (block.timestamp < stakingData.lockEndTime) {
+                revert TokensStillLocked(stakeId);
+            }
+            if (stakingData.vehicleId != 0) {
+                emit VehicleDetached(msg.sender, stakeId, stakingData.vehicleId);
+            }
 
-        boost.extendBoost(newLockEndTime);
+            amountWithdrawn = staking.withdraw(stakeId);
 
-        emit BoostExtended(msg.sender, newLockEndTime);
+            emit Withdrawn(msg.sender, stakeId, amountWithdrawn);
+        }
     }
 
     // TODO Documentation
-    function attachVehicle(uint256 vehicleId) external {
+    function extendStaking(uint256 stakeId) external {
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+        IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
+
+        if (address(staking) == address(0)) {
+            revert NoActiveStaking(msg.sender);
+        }
+
+        StakingData memory stakingData = staking.stakingData(stakeId);
+
+        uint256 newLockEndTime = block.timestamp + $.stakingLevels[stakingData.level].lockPeriod;
+
+        staking.extendStaking(stakeId, newLockEndTime);
+
+        emit StakingExtended(msg.sender, stakeId, newLockEndTime);
+    }
+
+    // TODO Documentation
+    function attachVehicle(uint256 stakeId, uint256 vehicleId) external {
         // TODO handle vehicle ID transfer
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
+        if ($.vehicleIdToStake[vehicleId] != address(0)) {
+            revert vehicleAlreadyAttached(vehicleId);
+        }
+
         try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
-            if (vehicleIdOwner != msg.sender) {
+            if (msg.sender != vehicleIdOwner) {
                 revert Unauthorized(msg.sender, vehicleId);
             }
 
-            if ($.userBoosts[msg.sender] == address(0)) {
-                revert NoActiveBoost();
+            IStakingBeacon staking = IStakingBeacon(_getDimoStakingStorage().stakerToStake[msg.sender]);
+
+            if (address(staking) == address(0)) {
+                revert NoActiveStaking(msg.sender);
             }
 
-            IBoost($.userBoosts[msg.sender]).attachVehicle(vehicleId);
+            staking.attachVehicle(stakeId, vehicleId);
 
-            emit BoostAttached(msg.sender, vehicleId);
+            emit VehicleAttached(msg.sender, stakeId, vehicleId);
         } catch {
             revert InvalidVehicleId(vehicleId);
         }
     }
 
     // TODO Documentation
-    function detachVehicle() external {
+    function detachVehicle(uint256 vehicleId) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
+        address stakingBeaconAddress = $.vehicleIdToStake[vehicleId];
 
-        if ($.userBoosts[msg.sender] == address(0)) {
-            revert NoActiveBoost();
+        if (stakingBeaconAddress == address(0)) {
+            revert NoActiveStaking(msg.sender);
         }
 
-        uint256 detachedVehicle = IBoost($.userBoosts[msg.sender]).detachVehicle();
+        try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
+            if (msg.sender != vehicleIdOwner && msg.sender != IStakingBeacon(stakingBeaconAddress).staker()) {
+                revert Unauthorized(msg.sender, vehicleId);
+            }
+        } catch {
+            revert InvalidVehicleId(vehicleId);
+        }
 
-        emit BoostDetached(msg.sender, detachedVehicle);
+        uint256 stakeId = IStakingBeacon(stakingBeaconAddress).detachVehicle(vehicleId);
+
+        emit VehicleDetached(msg.sender, stakeId, vehicleId);
     }
 
     // TODO Documentation
     function delegate(address delegatee) external {
-        DimoStakingStorage storage $ = _getDimoStakingStorage();
+        IStakingBeacon staking = IStakingBeacon(_getDimoStakingStorage().stakerToStake[msg.sender]);
 
-        if ($.userBoosts[msg.sender] == address(0)) {
-            revert NoActiveBoost();
+        if (address(staking) == address(0)) {
+            revert NoActiveStaking(msg.sender);
         }
 
-        IBoost($.userBoosts[msg.sender]).delegate(delegatee);
+        staking.delegate(delegatee);
     }
 
     // TODO Documentation
@@ -265,29 +342,37 @@ contract DIMOStaking is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     // TODO Documentation
-    function userBoosts(address user) external view returns (address) {
-        return _getDimoStakingStorage().userBoosts[user];
+    function stakerToStake(address user) external view returns (address) {
+        return _getDimoStakingStorage().stakerToStake[user];
     }
 
     // TODO Documentation
-    function boostLevels(uint256 level) external view returns (BoostLevel memory) {
-        return _getDimoStakingStorage().boostLevels[level];
+    function stakingLevels(uint256 level) external view returns (StakingLevel memory) {
+        return _getDimoStakingStorage().stakingLevels[level];
     }
 
     // TODO Documentation
-    function getBoostPoints(address user) external view returns (uint256) {
+    function getBaselinePoints(uint256 vehicleId) external view returns (uint256) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
+        IStakingBeacon staking = IStakingBeacon($.vehicleIdToStake[vehicleId]);
 
-        if ($.userBoosts[user] == address(0)) {
+        if (address(staking) == address(0)) {
             return 0;
         }
 
-        BoostData memory currentBoostData = IBoost($.userBoosts[user]).boostData();
+        StakingData memory stakingData = staking.stakingData(vehicleId);
 
-        if (currentBoostData.amount == 0) return 0;
-        if (currentBoostData.lockEndTime < block.timestamp) return 0;
+        if (stakingData.amount == 0) return 0;
+        if (stakingData.lockEndTime < block.timestamp) return 0;
 
-        return $.boostLevels[currentBoostData.level].points;
+        return $.stakingLevels[stakingData.level].points;
+    }
+
+    // TODO Documentation
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view override(ERC721Upgradeable, AccessControlUpgradeable) returns (bool) {
+        return super.supportsInterface(interfaceId);
     }
 
     // TODO Documentation
