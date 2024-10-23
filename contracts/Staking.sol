@@ -54,7 +54,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     error Unauthorized(address addr, uint256 vehicleId);
     error InvalidVehicleId(uint256 vehicleId);
     error NoActiveStaking(address user);
-    error vehicleAlreadyAttached(uint256 vehicleId);
+    error VehicleAlreadyAttached(uint256 vehicleId);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -129,7 +129,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
         if (vehicleId != 0) {
             if ($.vehicleIdToStake[vehicleId] != address(0)) {
-                revert vehicleAlreadyAttached(vehicleId);
+                revert VehicleAlreadyAttached(vehicleId);
             }
             try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
                 if (msg.sender != vehicleIdOwner) {
@@ -177,7 +177,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
         if (vehicleId != currentAttachedVehicleId) {
             if ($.vehicleIdToStake[vehicleId] != address(0)) {
-                revert vehicleAlreadyAttached(vehicleId);
+                revert VehicleAlreadyAttached(vehicleId);
             }
             if (vehicleId == 0) {
                 emit VehicleDetached(msg.sender, stakeId, currentAttachedVehicleId);
@@ -276,7 +276,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
         if ($.vehicleIdToStake[vehicleId] != address(0)) {
-            revert vehicleAlreadyAttached(vehicleId);
+            revert VehicleAlreadyAttached(vehicleId);
         }
 
         try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
@@ -342,13 +342,23 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     }
 
     // TODO Documentation
+    function stakingLevels(uint256 level) external view returns (StakingLevel memory) {
+        return _getDimoStakingStorage().stakingLevels[level];
+    }
+
+    // TODO Documentation
+    function stakerToStake(uint256 stakeId) external view returns (address) {
+        return _getDimoStakingStorage().stakeIdToStake[stakeId];
+    }
+
+    // TODO Documentation
     function stakerToStake(address user) external view returns (address) {
         return _getDimoStakingStorage().stakerToStake[user];
     }
 
     // TODO Documentation
-    function stakingLevels(uint256 level) external view returns (StakingLevel memory) {
-        return _getDimoStakingStorage().stakingLevels[level];
+    function vehicleIdToStake(uint256 vehicleId) external view returns (address) {
+        return _getDimoStakingStorage().vehicleIdToStake[vehicleId];
     }
 
     // TODO Documentation
