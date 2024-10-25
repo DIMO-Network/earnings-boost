@@ -16,7 +16,7 @@ contract StakingBeacon {
     mapping(uint256 vehicleId => uint256 stakeId) public vehicleIdToStakeId;
 
     error Unauthorized(address addr);
-    error NoActiveStaking(uint256 stakeId);
+    error InvalidStakeId(uint256 stakeId);
     error NoVehicleAttached(uint256 stakeId);
 
     modifier onlyDimoStaking() {
@@ -47,7 +47,20 @@ contract StakingBeacon {
     }
 
     // TODO Documentation
-    function setStakingData(uint256 stakeId, StakingData calldata stakingData_) external onlyDimoStaking {
+    function createStakingData(uint256 stakeId, StakingData calldata stakingData_) external onlyDimoStaking {
+        if (stakingData[stakeId].amount != 0) {
+            revert InvalidStakeId(stakeId);
+        }
+
+        stakingData[stakeId] = stakingData_;
+    }
+
+    // TODO Documentation
+    function upgradeStake(uint256 stakeId, StakingData calldata stakingData_) external onlyDimoStaking {
+        if (stakingData[stakeId].amount == 0) {
+            revert InvalidStakeId(stakeId);
+        }
+
         stakingData[stakeId] = stakingData_;
     }
 
@@ -56,7 +69,7 @@ contract StakingBeacon {
         StakingData memory stakingData_ = stakingData[stakeId];
 
         if (stakingData_.amount == 0) {
-            revert NoActiveStaking(stakeId);
+            revert InvalidStakeId(stakeId);
         }
 
         amountWithdrawn = stakingData_.amount;
@@ -71,7 +84,7 @@ contract StakingBeacon {
         StakingData storage stakingData_ = stakingData[stakeId];
 
         if (stakingData_.amount == 0) {
-            revert NoActiveStaking(stakeId);
+            revert InvalidStakeId(stakeId);
         }
 
         stakingData_.lockEndTime = newLockEndTime;
@@ -82,7 +95,7 @@ contract StakingBeacon {
         StakingData storage stakingData_ = stakingData[stakeId];
 
         if (stakingData_.amount == 0) {
-            revert NoActiveStaking(stakeId);
+            revert InvalidStakeId(stakeId);
         }
 
         stakingData_.vehicleId = vehicleId;

@@ -108,7 +108,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             $.stakerToStake[msg.sender] = stakingBeaconAddress;
         } else {
             // Creates a stakeId in an existing StakingBeacon
-            IStakingBeacon(stakingBeaconAddress).setStakingData(currentStakeId, stakingData);
+            IStakingBeacon(stakingBeaconAddress).createStakingData(currentStakeId, stakingData);
         }
 
         $.stakeIdToStake[currentStakeId] = stakingBeaconAddress;
@@ -171,7 +171,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             vehicleId: vehicleId
         });
 
-        staking.setStakingData(stakeId, newStakingData);
+        staking.upgradeStake(stakeId, newStakingData);
 
         emit Staked(msg.sender, stakeId, address(staking), newStakingData.amount, level, newStakingData.lockEndTime);
 
@@ -204,10 +204,6 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
         StakingData memory stakingData = staking.stakingData(stakeId);
 
-        if (stakingData.amount == 0) {
-            revert();
-            // revert NoActiveStaking(stakeId); // TODO Change revert params
-        }
         if (block.timestamp < stakingData.lockEndTime) {
             revert TokensStillLocked(stakeId);
         }
@@ -279,6 +275,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             revert VehicleAlreadyAttached(vehicleId);
         }
 
+        // TODO Detach vehicle ID if stake ID has it
+
         try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
             if (msg.sender != vehicleIdOwner) {
                 revert Unauthorized(msg.sender, vehicleId);
@@ -312,6 +310,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                 revert Unauthorized(msg.sender, vehicleId);
             }
         } catch {
+            // TODO This will only be reached if a vehicle ID is attached, then burned. Won't need if we have a burning hook
             revert InvalidVehicleId(vehicleId);
         }
 
@@ -347,7 +346,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     }
 
     // TODO Documentation
-    function stakerToStake(uint256 stakeId) external view returns (address) {
+    function stakeIdToStake(uint256 stakeId) external view returns (address) {
         return _getDimoStakingStorage().stakeIdToStake[stakeId];
     }
 

@@ -4,7 +4,9 @@ pragma solidity ^0.8.27;
 import '../Types.sol';
 
 interface IStakingBeacon {
-    function setStakingData(uint256 stakeId, StakingData calldata stakingData_) external;
+    function createStakingData(uint256 stakeId, StakingData calldata stakingData_) external;
+
+    function upgradeStake(uint256 stakeId, StakingData calldata stakingData_) external;
 
     function withdraw(uint256 stakeId) external returns (uint256);
 
