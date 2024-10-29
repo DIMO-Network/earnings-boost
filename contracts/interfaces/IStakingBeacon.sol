@@ -14,7 +14,7 @@ interface IStakingBeacon {
 
     function attachVehicle(uint256 stakeId, uint256 vehicleId) external;
 
-    function detachVehicle(uint256 stakeId) external returns (uint256);
+    function detachVehicle(uint256 stakeId) external;
 
     function delegate(address delegatee) external;
 

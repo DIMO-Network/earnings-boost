@@ -103,8 +103,8 @@ contract StakingBeacon {
     }
 
     // TODO Documentation
-    function detachVehicle(uint256 vehicleId) external onlyDimoStaking returns (uint256 stakeId) {
-        stakeId = vehicleIdToStakeId[vehicleId];
+    function detachVehicle(uint256 vehicleId) external onlyDimoStaking {
+        uint256 stakeId = vehicleIdToStakeId[vehicleId];
 
         if (stakeId == 0) {
             revert NoVehicleAttached(stakeId);
