@@ -1,22 +1,22 @@
 import { expect } from 'chai'
 import { EventLog } from 'ethers'
-import hre, { ignition } from 'hardhat'
+import { ethers, ignition } from 'hardhat'
 import { time, loadFixture } from '@nomicfoundation/hardhat-toolbox/network-helpers'
 
 import * as C from '../utils/constants'
 import DIMOStakingTestModule from '../ignition/modules/DIMOStakingTest'
-import type { DIMOStaking, MockERC20, MockERC721 } from '../typechain-types'
+import type { DIMOStaking, MockDimoToken, MockVehicleId } from '../typechain-types'
 
 type StakingModule = {
     dimoStaking: DIMOStaking
-    mockDimoToken: MockERC20
-    mockVehicleId: MockERC721
+    mockDimoToken: MockDimoToken
+    mockVehicleId: MockVehicleId
 }
 
 describe('Staking', function () {
     async function setup() {
-        const [deployer, user1, user2] = await hre.ethers.getSigners()
-        const amount = hre.ethers.parseEther('1000000')
+        const [deployer, user1, user2] = await ethers.getSigners()
+        const amount = ethers.parseEther('1000000')
 
         const { dimoStaking, mockDimoToken, mockVehicleId } = (await ignition.deploy(
             DIMOStakingTestModule
@@ -70,9 +70,7 @@ describe('Staking', function () {
 
                 await mockDimoToken.connect(user1).approve(await dimoStaking.getAddress(), 0)
 
-                await expect(dimoStaking.connect(user1).stake(1, 2))
-                    .to.be.revertedWithCustomError(mockDimoToken, 'ERC20InsufficientAllowance')
-                    .withArgs(await dimoStaking.getAddress(), 0, C.stakingLevels[1].amount)
+                await expect(dimoStaking.connect(user1).stake(1, 2)).to.be.revertedWith('ERC20: insufficient allowance')
             })
             it('Should revert if caller is not the vehicle ID owner', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
@@ -104,12 +102,12 @@ describe('Staking', function () {
                 it('Should correctly create a new Staking Beacon contract', async () => {
                     const { dimoStaking, user1 } = await loadFixture(setup)
 
-                    expect(await dimoStaking.stakerToStake(user1.address)).to.equal(hre.ethers.ZeroAddress)
+                    expect(await dimoStaking.stakerToStake(user1.address)).to.equal(ethers.ZeroAddress)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const eventArgs = (receipt?.logs[1] as EventLog).args
+                    const eventArgs = (receipt?.logs[2] as EventLog).args
                     const stakeId = eventArgs[1] as bigint
-                    const stakingBeacon = await hre.ethers.getContractAt('StakingBeacon', eventArgs[2])
+                    const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
 
                     expect(stakeId).to.equal(1)
 
@@ -129,7 +127,7 @@ describe('Staking', function () {
                     const amount = C.stakingLevels[1].amount
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const eventArgs = (receipt?.logs[1] as EventLog).args
+                    const eventArgs = (receipt?.logs[2] as EventLog).args
                     const deployedStakingBeacon = eventArgs[2]
 
                     const stakerBalanceAfter = await mockDimoToken.balanceOf(user1)
@@ -149,9 +147,9 @@ describe('Staking', function () {
                     await mockVehicleId.mint(user1.address)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 3)).wait()
-                    const eventArgs = (receipt?.logs[1] as EventLog).args
+                    const eventArgs = (receipt?.logs[2] as EventLog).args
                     const stakeId = eventArgs[1] as bigint
-                    const stakingBeacon = await hre.ethers.getContractAt('StakingBeacon', eventArgs[2])
+                    const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
 
                     expect(stakeId).to.equal(2)
 
@@ -167,7 +165,7 @@ describe('Staking', function () {
                     const { dimoStaking, user1, mockDimoToken, mockVehicleId } = await loadFixture(setup)
 
                     const receipt1 = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const eventArgs1 = (receipt1?.logs[1] as EventLog).args
+                    const eventArgs1 = (receipt1?.logs[2] as EventLog).args
                     const stakingBeaconAddress = eventArgs1[2] as string
 
                     const stakerBalanceBefore = await mockDimoToken.balanceOf(user1)
@@ -179,7 +177,7 @@ describe('Staking', function () {
                     const amount = C.stakingLevels[1].amount
 
                     const receipt2 = await (await dimoStaking.connect(user1).stake(1, 3)).wait()
-                    const eventArgs2 = (receipt2?.logs[1] as EventLog).args
+                    const eventArgs2 = (receipt2?.logs[2] as EventLog).args
                     const stakingBeacon = eventArgs2[2]
 
                     const stakerBalanceAfter = await mockDimoToken.balanceOf(user1)
@@ -197,15 +195,15 @@ describe('Staking', function () {
                     const { dimoStaking, user1 } = await loadFixture(setup)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const event = receipt?.logs[1] as EventLog
+                    const event = receipt?.logs[2] as EventLog
                     const args = event.args
                     const lockEndTime = BigInt(await time.latest()) + C.stakingLevels[1].lockPeriod
 
                     expect(event.fragment.name).to.equal('Staked')
                     expect(args[0]).to.equal(user1.address) // user
                     expect(args[1]).to.equal(1) // stakeId
-                    expect(args[2]).to.not.equal(hre.ethers.ZeroAddress) // stakingBeacon
-                    expect(hre.ethers.isAddress(args[2])).to.be.true // stakingBeacon
+                    expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
+                    expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
                     expect(args[3]).to.equal(C.stakingLevels[1].amount) // amount
                     expect(args[4]).to.equal(1) // level
                     expect(args[5]).to.be.closeTo(lockEndTime, 5n) // lockEndTime
@@ -233,15 +231,15 @@ describe('Staking', function () {
                     await mockVehicleId.mint(user1.address)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 3)).wait()
-                    const event = receipt?.logs[1] as EventLog
+                    const event = receipt?.logs[2] as EventLog
                     const args = event.args
                     const lockEndTime = BigInt(await time.latest()) + C.stakingLevels[1].lockPeriod
 
                     expect(event.fragment.name).to.equal('Staked')
                     expect(args[0]).to.equal(user1.address) // user
                     expect(args[1]).to.equal(2) // stakeId
-                    expect(args[2]).to.not.equal(hre.ethers.ZeroAddress) // stakingBeacon
-                    expect(hre.ethers.isAddress(args[2])).to.be.true // stakingBeacon
+                    expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
+                    expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
                     expect(args[3]).to.equal(C.stakingLevels[1].amount) // amount
                     expect(args[4]).to.equal(1) // level
                     expect(args[5]).to.be.closeTo(lockEndTime, 5n) // lockEndTime
@@ -293,13 +291,13 @@ describe('Staking', function () {
 
                 await mockDimoToken.connect(user1).approve(await dimoStaking.getAddress(), 0)
 
-                await expect(dimoStaking.connect(user1).upgradeStake(1, 2, 1))
-                    .to.be.revertedWithCustomError(mockDimoToken, 'ERC20InsufficientAllowance')
-                    .withArgs(await dimoStaking.getAddress(), 0, C.stakingLevels[2].amount - C.stakingLevels[1].amount)
+                await expect(dimoStaking.connect(user1).upgradeStake(1, 2, 1)).to.be.revertedWith(
+                    'ERC20: insufficient allowance'
+                )
             })
             it('Should revert if stake ID is invalid', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
-                const stakingBeacon = (await hre.ethers.getContractFactory('StakingBeacon')).interface
+                const stakingBeacon = (await ethers.getContractFactory('StakingBeacon')).interface
 
                 await dimoStaking.connect(user1).stake(1, 1)
 
@@ -345,9 +343,9 @@ describe('Staking', function () {
                 const { dimoStaking, user1 } = await loadFixture(setup)
 
                 const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                const eventArgs = (receipt?.logs[1] as EventLog).args
+                const eventArgs = (receipt?.logs[2] as EventLog).args
                 const stakeId = eventArgs[1] as bigint
-                const stakingBeacon = await hre.ethers.getContractAt('StakingBeacon', eventArgs[2])
+                const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
                 const lockEndTimeBefore = BigInt(await time.latest()) + C.stakingLevels[1].lockPeriod
 
                 const boostStructBefore = await stakingBeacon.stakingData(stakeId)
@@ -373,7 +371,7 @@ describe('Staking', function () {
                 const { dimoStaking, user1, mockDimoToken } = await loadFixture(setup)
 
                 const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                const eventArgs = (receipt?.logs[1] as EventLog).args
+                const eventArgs = (receipt?.logs[2] as EventLog).args
                 const deployedStakingBeacon = eventArgs[2]
 
                 const stakerBalanceBefore = await mockDimoToken.balanceOf(user1)
@@ -398,15 +396,15 @@ describe('Staking', function () {
                 await dimoStaking.connect(user1).stake(1, 1)
 
                 const receipt = await (await dimoStaking.connect(user1).upgradeStake(1, 2, 1)).wait()
-                const event = receipt?.logs[1] as EventLog
+                const event = receipt?.logs[2] as EventLog
                 const args = event.args
                 const lockEndTime = BigInt(await time.latest()) + C.stakingLevels[2].lockPeriod
 
                 expect(event.fragment.name).to.equal('Staked')
                 expect(args[0]).to.equal(user1.address) // user
                 expect(args[1]).to.equal(1) // stakeId
-                expect(args[2]).to.not.equal(hre.ethers.ZeroAddress) // stakingBeacon
-                expect(hre.ethers.isAddress(args[2])).to.be.true // stakingBeacon
+                expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
+                expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
                 expect(args[3]).to.equal(C.stakingLevels[2].amount) // amount
                 expect(args[4]).to.equal(2) // level
                 expect(args[5]).to.be.closeTo(lockEndTime, 5n) // lockEndTime
@@ -466,7 +464,7 @@ describe('Staking', function () {
             })
             it('Should revert if stake ID is invalid', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
-                const stakingBeacon = (await hre.ethers.getContractFactory('StakingBeacon')).interface
+                const stakingBeacon = (await ethers.getContractFactory('StakingBeacon')).interface
 
                 await dimoStaking.connect(user1).stake(1, 1)
 
@@ -490,8 +488,8 @@ describe('Staking', function () {
                 const { dimoStaking, user1 } = await loadFixture(setup)
 
                 const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                const eventArgs = (receipt?.logs[1] as EventLog).args
-                const stakingBeacon = await hre.ethers.getContractAt('StakingBeacon', eventArgs[2])
+                const eventArgs = (receipt?.logs[2] as EventLog).args
+                const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
 
                 await time.increase(C.stakingLevels[1].lockPeriod + 99n)
 
@@ -504,8 +502,8 @@ describe('Staking', function () {
                 const { dimoStaking, user1, mockDimoToken } = await loadFixture(setup)
 
                 const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                const eventArgs = (receipt?.logs[1] as EventLog).args
-                const stakingBeacon = await hre.ethers.getContractAt('StakingBeacon', eventArgs[2])
+                const eventArgs = (receipt?.logs[2] as EventLog).args
+                const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
 
                 const stakerBalanceBefore = await mockDimoToken.balanceOf(user1)
 
@@ -570,7 +568,7 @@ describe('Staking', function () {
             })
             it('Should revert if stake ID is invalid', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
-                const stakingBeacon = (await hre.ethers.getContractFactory('StakingBeacon')).interface
+                const stakingBeacon = (await ethers.getContractFactory('StakingBeacon')).interface
 
                 await dimoStaking.connect(user1).stake(1, 1)
 
@@ -585,8 +583,8 @@ describe('Staking', function () {
                 const { dimoStaking, user1 } = await loadFixture(setup)
 
                 const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                const eventArgs = (receipt?.logs[1] as EventLog).args
-                const stakingBeacon = await hre.ethers.getContractAt('StakingBeacon', eventArgs[2])
+                const eventArgs = (receipt?.logs[2] as EventLog).args
+                const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
                 const stakingDataBefore = await stakingBeacon.stakingData(1)
                 const lockEndTimeBefore = BigInt(await time.latest()) + C.stakingLevels[1].lockPeriod
 
@@ -666,8 +664,8 @@ describe('Staking', function () {
                 const { dimoStaking, user1 } = await loadFixture(setup)
 
                 const receipt = await (await dimoStaking.connect(user1).stake(1, 0)).wait()
-                const eventArgs = (receipt?.logs[1] as EventLog).args
-                const stakingBeacon = await hre.ethers.getContractAt('StakingBeacon', eventArgs[2])
+                const eventArgs = (receipt?.logs[2] as EventLog).args
+                const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
                 const stakingDataBefore = await stakingBeacon.stakingData(1)
 
                 expect(stakingDataBefore.vehicleId).to.equal(0)
@@ -721,8 +719,8 @@ describe('Staking', function () {
                 const { dimoStaking, user1 } = await loadFixture(setup)
 
                 const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                const eventArgs = (receipt?.logs[1] as EventLog).args
-                const stakingBeacon = await hre.ethers.getContractAt('StakingBeacon', eventArgs[2])
+                const eventArgs = (receipt?.logs[2] as EventLog).args
+                const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
                 const stakingDataBefore = await stakingBeacon.stakingData(1)
 
                 expect(stakingDataBefore.vehicleId).to.equal(1)
@@ -743,6 +741,47 @@ describe('Staking', function () {
                 await expect(dimoStaking.connect(user1).detachVehicle(1))
                     .to.emit(dimoStaking, 'VehicleDetached')
                     .withArgs(user1.address, 1, 1)
+            })
+        })
+    })
+
+    describe('delegate', () => {
+        context('Errors', () => {
+            it('Should revert if caller does not have a Staking Beacon', async () => {
+                const { dimoStaking, user1 } = await loadFixture(setup)
+
+                await expect(dimoStaking.connect(user1).delegate(user1.address))
+                    .to.be.revertedWithCustomError(dimoStaking, 'NoActiveStaking')
+                    .withArgs(user1.address)
+            })
+        })
+
+        context('State', () => {
+            it('Should correctly delegate staked tokens to your own account', async () => {
+                const { dimoStaking, mockDimoToken, user1 } = await loadFixture(setup)
+                const balanceUser1 = await mockDimoToken.balanceOf(user1.address)
+
+                await mockDimoToken.connect(user1).delegate(user1.address)
+                expect(await mockDimoToken.getVotes(user1.address)).to.equal(balanceUser1)
+
+                await dimoStaking.connect(user1).stake(1, 1)
+
+                // Should lose the staking level amount in voting power when stake
+                expect(await mockDimoToken.getVotes(user1.address)).to.equal(balanceUser1 - C.stakingLevels[1].amount)
+
+                await dimoStaking.connect(user1).delegate(user1.address)
+                expect(await mockDimoToken.getVotes(user1.address)).to.equal(balanceUser1)
+            })
+            it('Should correctly delegate staked tokens to another account', async () => {
+                const { dimoStaking, mockDimoToken, user1, user2 } = await loadFixture(setup)
+
+                await dimoStaking.connect(user1).stake(1, 1)
+
+                expect(await mockDimoToken.getVotes(user2.address)).to.equal(0)
+
+                await dimoStaking.connect(user1).delegate(user2.address)
+
+                expect(await mockDimoToken.getVotes(user2.address)).to.equal(C.stakingLevels[1].amount)
             })
         })
     })
