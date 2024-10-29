@@ -22,7 +22,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         // TODO I am not really using this mapping now, should remove?
         mapping(uint256 stakeId => address stakerContract) stakeIdToStake;
         mapping(address staker => address stakerContract) stakerToStake;
-        mapping(uint256 vehicleTokenId => address stakerContract) vehicleIdToStake;
+        mapping(uint256 vehicleTokenId => uint256 stakeId) vehicleIdToStakeId;
     }
     struct StakingLevel {
         uint256 amount;
@@ -128,14 +128,23 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         );
 
         if (vehicleId != 0) {
-            if ($.vehicleIdToStake[vehicleId] != address(0)) {
-                revert VehicleAlreadyAttached(vehicleId);
-            }
             try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
                 if (msg.sender != vehicleIdOwner) {
                     revert Unauthorized(msg.sender, vehicleId);
                 }
-                $.vehicleIdToStake[stakingData.vehicleId] = stakingBeaconAddress;
+
+                uint256 attachedStakeId = $.vehicleIdToStakeId[vehicleId];
+                if (attachedStakeId != 0) {
+                    if (getBaselinePoints(vehicleId) > 0) {
+                        revert VehicleAlreadyAttached(vehicleId);
+                    }
+
+                    IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(vehicleId);
+
+                    emit VehicleDetached(msg.sender, attachedStakeId, vehicleId);
+                }
+
+                $.vehicleIdToStakeId[stakingData.vehicleId] = currentStakeId;
                 emit VehicleAttached(msg.sender, currentStakeId, stakingData.vehicleId);
             } catch {
                 revert InvalidVehicleId(vehicleId);
@@ -176,9 +185,6 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         emit Staked(msg.sender, stakeId, address(staking), newStakingData.amount, level, newStakingData.lockEndTime);
 
         if (vehicleId != currentAttachedVehicleId) {
-            if ($.vehicleIdToStake[vehicleId] != address(0)) {
-                revert VehicleAlreadyAttached(vehicleId);
-            }
             if (vehicleId == 0) {
                 emit VehicleDetached(msg.sender, stakeId, currentAttachedVehicleId);
             } else {
@@ -186,6 +192,18 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                     if (vehicleIdOwner != msg.sender) {
                         revert Unauthorized(msg.sender, vehicleId);
                     }
+
+                    uint256 attachedStakeId = $.vehicleIdToStakeId[vehicleId];
+                    if (attachedStakeId != 0) {
+                        if (getBaselinePoints(vehicleId) > 0) {
+                            revert VehicleAlreadyAttached(vehicleId);
+                        }
+
+                        IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(vehicleId);
+
+                        emit VehicleDetached(msg.sender, attachedStakeId, vehicleId);
+                    }
+
                     emit VehicleAttached(msg.sender, stakeId, vehicleId);
                 } catch {
                     revert InvalidVehicleId(vehicleId);
@@ -271,7 +289,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         // TODO handle vehicle ID transfer
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        if ($.vehicleIdToStake[vehicleId] != address(0)) {
+        if ($.vehicleIdToStakeId[vehicleId] != 0) {
             revert VehicleAlreadyAttached(vehicleId);
         }
 
@@ -299,7 +317,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     // TODO Documentation
     function detachVehicle(uint256 vehicleId) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
-        address stakingBeaconAddress = $.vehicleIdToStake[vehicleId];
+        uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
+        address stakingBeaconAddress = $.stakeIdToStake[stakeId];
 
         if (stakingBeaconAddress == address(0)) {
             revert NoActiveStaking(msg.sender);
@@ -314,7 +333,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             revert InvalidVehicleId(vehicleId);
         }
 
-        uint256 stakeId = IStakingBeacon(stakingBeaconAddress).detachVehicle(vehicleId);
+        IStakingBeacon(stakingBeaconAddress).detachVehicle(vehicleId);
 
         emit VehicleDetached(msg.sender, stakeId, vehicleId);
     }
@@ -356,23 +375,24 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     }
 
     // TODO Documentation
-    function vehicleIdToStake(uint256 vehicleId) external view returns (address) {
-        return _getDimoStakingStorage().vehicleIdToStake[vehicleId];
+    function vehicleIdToStakeId(uint256 vehicleId) external view returns (uint256) {
+        return _getDimoStakingStorage().vehicleIdToStakeId[vehicleId];
     }
 
     // TODO Documentation
-    function getBaselinePoints(uint256 vehicleId) external view returns (uint256) {
+    function getBaselinePoints(uint256 vehicleId) public view returns (uint256) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
-        IStakingBeacon staking = IStakingBeacon($.vehicleIdToStake[vehicleId]);
+        uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
 
-        if (address(staking) == address(0)) {
+        if (stakeId == 0) {
             return 0;
         }
 
-        StakingData memory stakingData = staking.stakingData(vehicleId);
+        IStakingBeacon staking = IStakingBeacon($.stakeIdToStake[stakeId]);
+        StakingData memory stakingData = staking.stakingData(stakeId);
 
-        if (stakingData.amount == 0) return 0;
-        if (stakingData.lockEndTime < block.timestamp) return 0;
+        if (stakingData.amount == 0 || stakingData.lockEndTime < block.timestamp || stakingData.vehicleId == 0)
+            return 0;
 
         return $.stakingLevels[stakingData.level].points;
     }
