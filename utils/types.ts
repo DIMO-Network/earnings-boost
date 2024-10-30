@@ -2,7 +2,7 @@ export type StakingData = {
     level: bigint
     amount: bigint
     lockEndTime: bigint
-    attachedVehicleId: bigint
+    vehicleId: bigint
 }
 
 export type StakingLevel = {

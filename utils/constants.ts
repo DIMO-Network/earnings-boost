@@ -1,6 +1,6 @@
 import { ethers } from 'hardhat'
 
-import type { StakingLevel } from './types'
+import type { StakingLevel, StakingData } from './types'
 
 export const name = 'DIMO Staking'
 export const symbol = 'DSTK'
@@ -22,3 +22,10 @@ export const stakingLevels: StakingLevel[] = [
         points: 3000n,
     },
 ]
+
+export const mockSakingData: StakingData = {
+    level: 1n,
+    amount: ethers.parseEther('500'),
+    lockEndTime: 3999999999999n,
+    vehicleId: 1n,
+}
