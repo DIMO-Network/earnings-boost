@@ -135,17 +135,19 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
                 uint256 attachedStakeId = $.vehicleIdToStakeId[vehicleId];
                 if (attachedStakeId != 0) {
+                    // If vehicle ID is already attached and not expired
                     if (getBaselinePoints(vehicleId) > 0) {
                         revert VehicleAlreadyAttached(vehicleId);
                     }
 
-                    IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(vehicleId);
+                    // Expired Stake will have Vehicle detached
+                    IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(attachedStakeId);
 
                     emit VehicleDetached(msg.sender, attachedStakeId, vehicleId);
                 }
 
-                $.vehicleIdToStakeId[stakingData.vehicleId] = currentStakeId;
-                emit VehicleAttached(msg.sender, currentStakeId, stakingData.vehicleId);
+                $.vehicleIdToStakeId[vehicleId] = currentStakeId;
+                emit VehicleAttached(msg.sender, currentStakeId, vehicleId);
             } catch {
                 revert InvalidVehicleId(vehicleId);
             }
@@ -195,15 +197,20 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
                     uint256 attachedStakeId = $.vehicleIdToStakeId[vehicleId];
                     if (attachedStakeId != 0) {
+                        // If vehicle ID is already attached and not expired
                         if (getBaselinePoints(vehicleId) > 0) {
                             revert VehicleAlreadyAttached(vehicleId);
                         }
 
+                        // Current attached Vehicle ID will be replaced
+                        delete $.vehicleIdToStakeId[currentAttachedVehicleId];
+                        // Expired Stake will have Vehicle detached
                         IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(vehicleId);
 
                         emit VehicleDetached(msg.sender, attachedStakeId, vehicleId);
                     }
 
+                    $.vehicleIdToStakeId[vehicleId] = stakeId;
                     emit VehicleAttached(msg.sender, stakeId, vehicleId);
                 } catch {
                     revert InvalidVehicleId(vehicleId);
@@ -249,10 +256,6 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             stakeId = stakeIds[i];
             stakingData = staking.stakingData(stakeId);
 
-            if (stakingData.amount == 0) {
-                revert();
-                // revert NoActiveStaking(stakeId); // TODO Change revert params
-            }
             if (block.timestamp < stakingData.lockEndTime) {
                 revert TokensStillLocked(stakeId);
             }
@@ -293,7 +296,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             revert VehicleAlreadyAttached(vehicleId);
         }
 
-        // TODO Detach vehicle ID if stake ID has it
+        // TODO Detach vehicleId if stakeId is expired?
 
         try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
             if (msg.sender != vehicleIdOwner) {
@@ -391,6 +394,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         IStakingBeacon staking = IStakingBeacon($.stakeIdToStake[stakeId]);
         StakingData memory stakingData = staking.stakingData(stakeId);
 
+        // TODO stakingData.amount == 0 and stakingData.vehicleId == 0 might be redundant
         if (stakingData.amount == 0 || stakingData.lockEndTime < block.timestamp || stakingData.vehicleId == 0)
             return 0;
 

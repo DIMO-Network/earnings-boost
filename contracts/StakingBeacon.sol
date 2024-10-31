@@ -13,7 +13,6 @@ contract StakingBeacon {
     address public immutable staker;
 
     mapping(uint256 stakeId => StakingData) public stakingData;
-    mapping(uint256 vehicleId => uint256 stakeId) public vehicleIdToStakeId;
 
     error Unauthorized(address addr);
     error InvalidStakeId(uint256 stakeId);
@@ -40,10 +39,6 @@ contract StakingBeacon {
         staker = staker_;
 
         stakingData[stakeId_] = stakingData_;
-
-        if (stakingData_.vehicleId != 0) {
-            vehicleIdToStakeId[stakingData_.vehicleId] = stakeId_;
-        }
     }
 
     // TODO Documentation
@@ -99,19 +94,17 @@ contract StakingBeacon {
         }
 
         stakingData_.vehicleId = vehicleId;
-        vehicleIdToStakeId[vehicleId] = stakeId;
     }
 
     // TODO Documentation
-    function detachVehicle(uint256 vehicleId) external onlyDimoStaking {
-        uint256 stakeId = vehicleIdToStakeId[vehicleId];
+    function detachVehicle(uint256 stakeId) external onlyDimoStaking {
+        uint256 vehicleId = stakingData[stakeId].vehicleId;
 
-        if (stakeId == 0) {
+        if (vehicleId == 0) {
             revert NoVehicleAttached(stakeId);
         }
 
         delete stakingData[stakeId].vehicleId;
-        delete vehicleIdToStakeId[vehicleId];
     }
 
     // TODO Documentation
