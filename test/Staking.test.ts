@@ -4,7 +4,7 @@ import { ethers, ignition } from 'hardhat'
 import { time, loadFixture } from '@nomicfoundation/hardhat-toolbox/network-helpers'
 
 import * as C from '../utils/constants'
-import { DIMOStakingTestModule } from '../ignition/modules/DIMOStakingTest'
+import DIMOStakingTestModule from '../ignition/modules/DIMOStakingTest'
 import type { DIMOStaking, MockDimoToken, MockVehicleId } from '../typechain-types'
 
 type StakingModule = {
