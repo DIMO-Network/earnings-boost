@@ -1017,6 +1017,17 @@ describe('Staking', function () {
                     .to.be.revertedWithCustomError(dimoStaking, 'Unauthorized')
                     .withArgs(user2.address, 1)
             })
+            it('Should revert if vehicle ID has been burned', async () => {
+                const { dimoStaking, mockVehicleId, user1 } = await loadFixture(setup)
+
+                await dimoStaking.connect(user1).stake(1, 1)
+
+                await mockVehicleId.burn(1)
+
+                await expect(dimoStaking.connect(user1).detachVehicle(1))
+                    .to.be.revertedWithCustomError(dimoStaking, 'InvalidVehicleId')
+                    .withArgs(1)
+            })
         })
 
         context('State', () => {
@@ -1156,7 +1167,18 @@ describe('Staking', function () {
 
             expect(await dimoStaking.getBaselinePoints(1)).to.equal(0)
         })
-        it('Should return 0 Stake is expired', async () => {
+        it('Should return 0 if Vehicle has been burned', async () => {
+            const { dimoStaking, mockVehicleId, user1 } = await loadFixture(setup)
+
+            await dimoStaking.connect(user1).stake(1, 1)
+
+            expect(await dimoStaking.getBaselinePoints(1)).to.equal(C.stakingLevels[1].points)
+
+            await mockVehicleId.burn(1)
+
+            expect(await dimoStaking.getBaselinePoints(1)).to.equal(0)
+        })
+        it('Should return 0 if Stake is expired', async () => {
             const { dimoStaking, user1 } = await loadFixture(setup)
 
             await dimoStaking.connect(user1).stake(1, 1)

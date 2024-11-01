@@ -13,6 +13,8 @@ import './Types.sol';
 import './interfaces/IStakingBeacon.sol';
 import './interfaces/IVehicleId.sol';
 
+// TODO Documentation
+// Mention that burned vehicles are not handled. Functions always check token existence
 contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     struct DimoStakingStorage {
         address dimoToken;
@@ -135,7 +137,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             uint256 attachedStakeId = $.vehicleIdToStakeId[vehicleId];
             if (attachedStakeId != 0) {
                 // If vehicle ID is already attached and not expired
-                if (getBaselinePoints(vehicleId) > 0) {
+                if (isVehicleAttachedAndActive(vehicleId)) {
                     revert VehicleAlreadyAttached(vehicleId);
                 }
 
@@ -190,7 +192,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                 uint256 attachedStakeId = $.vehicleIdToStakeId[vehicleId];
                 if (attachedStakeId != 0) {
                     // If vehicle ID is already attached and not expired
-                    if (getBaselinePoints(vehicleId) > 0) {
+                    if (isVehicleAttachedAndActive(vehicleId)) {
                         revert VehicleAlreadyAttached(vehicleId);
                     }
 
@@ -297,7 +299,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             revert VehicleAlreadyAttached(vehicleId);
         } else if (attachedStakeId != 0) {
             // If vehicle ID is already attached and not expired
-            if (getBaselinePoints(vehicleId) > 0) {
+            if (isVehicleAttachedAndActive(vehicleId)) {
                 revert VehicleAlreadyAttached(vehicleId);
             }
 
@@ -334,7 +336,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                 revert Unauthorized(msg.sender, vehicleId);
             }
         } catch {
-            // TODO This will only be reached if a vehicle ID is attached, then burned. Won't need if we have a burning hook
+            // This will only be reached if a vehicle ID is attached, then burned
+            // Staker can still attach another available existing vehicle
             revert InvalidVehicleId(vehicleId);
         }
 
@@ -386,9 +389,13 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     }
 
     // TODO Documentation
-    function getBaselinePoints(uint256 vehicleId) public view returns (uint256) {
+    function getBaselinePoints(uint256 vehicleId) external view returns (uint256) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
         uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
+
+        if (!IVehicleId($.vehicleIdProxy).exists(vehicleId)) {
+            return 0;
+        }
 
         if (stakeId == 0) {
             return 0;
@@ -413,6 +420,25 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
     // TODO Documentation
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
+
+    // TODO Documentation
+    function isVehicleAttachedAndActive(uint256 vehicleId) private view returns (bool) {
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+        uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
+
+        if (stakeId == 0) {
+            return false;
+        }
+
+        IStakingBeacon staking = IStakingBeacon($.stakeIdToStake[stakeId]);
+        StakingData memory stakingData = staking.stakingData(stakeId);
+
+        // TODO stakingData.amount == 0 and stakingData.vehicleId == 0 might be redundant
+        if (stakingData.amount == 0 || stakingData.lockEndTime < block.timestamp || stakingData.vehicleId == 0)
+            return false;
+
+        return true;
+    }
 
     /**
      * @dev Returns a pointer to the storage namespace
