@@ -120,6 +120,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             'Transfer failed'
         );
 
+        _safeMint(msg.sender, currentStakeId);
+
         emit Staked(
             msg.sender,
             currentStakeId,

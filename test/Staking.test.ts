@@ -123,7 +123,7 @@ describe('Staking', function () {
                     expect(await dimoStaking.stakerToStake(user1.address)).to.equal(ethers.ZeroAddress)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const eventArgs = (receipt?.logs[2] as EventLog).args
+                    const eventArgs = (receipt?.logs[3] as EventLog).args
                     const stakeId = eventArgs[1] as bigint
                     const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
 
@@ -141,7 +141,7 @@ describe('Staking', function () {
                     const { dimoStaking, user1 } = await loadFixture(setup)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 0)).wait()
-                    const eventArgs = (receipt?.logs[2] as EventLog).args
+                    const eventArgs = (receipt?.logs[3] as EventLog).args
                     const stakeId = eventArgs[1] as bigint
                     const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
 
@@ -157,7 +157,7 @@ describe('Staking', function () {
                     const amount = C.stakingLevels[1].amount
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const eventArgs = (receipt?.logs[2] as EventLog).args
+                    const eventArgs = (receipt?.logs[3] as EventLog).args
                     const deployedStakingBeacon = eventArgs[2]
 
                     const stakerBalanceAfter = await mockDimoToken.balanceOf(user1)
@@ -177,7 +177,7 @@ describe('Staking', function () {
                     await mockVehicleId.mint(user1.address)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 3)).wait()
-                    const eventArgs = (receipt?.logs[2] as EventLog).args
+                    const eventArgs = (receipt?.logs[3] as EventLog).args
                     const stakeId = eventArgs[1] as bigint
                     const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
 
@@ -197,7 +197,7 @@ describe('Staking', function () {
                     await dimoStaking.connect(user1).stake(1, 1)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 0)).wait()
-                    const eventArgs = (receipt?.logs[2] as EventLog).args
+                    const eventArgs = (receipt?.logs[3] as EventLog).args
                     const stakeId = eventArgs[1] as bigint
                     const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
 
@@ -209,7 +209,7 @@ describe('Staking', function () {
                     const { dimoStaking, user1, mockDimoToken, mockVehicleId } = await loadFixture(setup)
 
                     const receipt1 = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const eventArgs1 = (receipt1?.logs[2] as EventLog).args
+                    const eventArgs1 = (receipt1?.logs[3] as EventLog).args
                     const stakingBeaconAddress = eventArgs1[2] as string
 
                     const stakerBalanceBefore = await mockDimoToken.balanceOf(user1)
@@ -221,7 +221,7 @@ describe('Staking', function () {
                     const amount = C.stakingLevels[1].amount
 
                     const receipt2 = await (await dimoStaking.connect(user1).stake(1, 3)).wait()
-                    const eventArgs2 = (receipt2?.logs[2] as EventLog).args
+                    const eventArgs2 = (receipt2?.logs[3] as EventLog).args
                     const stakingBeacon = eventArgs2[2]
 
                     const stakerBalanceAfter = await mockDimoToken.balanceOf(user1)
@@ -260,7 +260,7 @@ describe('Staking', function () {
                     const { dimoStaking, user1 } = await loadFixture(setup)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const event = receipt?.logs[2] as EventLog
+                    const event = receipt?.logs[3] as EventLog
                     const args = event.args
                     const lockEndTime = BigInt(await time.latest()) + C.stakingLevels[1].lockPeriod
 
@@ -296,7 +296,7 @@ describe('Staking', function () {
                     await mockVehicleId.mint(user1.address)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 3)).wait()
-                    const event = receipt?.logs[2] as EventLog
+                    const event = receipt?.logs[3] as EventLog
                     const args = event.args
                     const lockEndTime = BigInt(await time.latest()) + C.stakingLevels[1].lockPeriod
 
@@ -419,7 +419,7 @@ describe('Staking', function () {
                 const { dimoStaking, user1, mockVehicleId } = await loadFixture(setup)
 
                 const receipt = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                const eventArgs = (receipt?.logs[2] as EventLog).args
+                const eventArgs = (receipt?.logs[3] as EventLog).args
                 const stakeId = eventArgs[1] as bigint
                 const stakingBeacon = await ethers.getContractAt('StakingBeacon', eventArgs[2])
                 const lockEndTimeBefore = BigInt(await time.latest()) + C.stakingLevels[1].lockPeriod
