@@ -20,7 +20,6 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         uint256 currentStakeId;
         // TODO Maybe we should ignore the level, it does not mean much
         mapping(uint256 => StakingLevel) stakingLevels;
-        // TODO I am not really using this mapping now, should remove?
         mapping(uint256 stakeId => address stakerContract) stakeIdToStake;
         mapping(address staker => address stakerContract) stakerToStake;
         mapping(uint256 vehicleTokenId => uint256 stakeId) vehicleIdToStakeId;
@@ -198,7 +197,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                     // Current attached Vehicle ID will be replaced
                     delete $.vehicleIdToStakeId[currentAttachedVehicleId];
                     // Expired Stake will have Vehicle detached
-                    IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(vehicleId);
+                    IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(attachedStakeId);
 
                     emit VehicleDetached(msg.sender, attachedStakeId, vehicleId);
                 }
@@ -283,21 +282,35 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     function attachVehicle(uint256 stakeId, uint256 vehicleId) external {
         // TODO handle vehicle ID transfer
         DimoStakingStorage storage $ = _getDimoStakingStorage();
+        IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
 
-        if ($.vehicleIdToStakeId[vehicleId] != 0) {
-            revert VehicleAlreadyAttached(vehicleId);
+        if (address(staking) == address(0)) {
+            revert NoActiveStaking(msg.sender);
         }
 
         if (!IVehicleId($.vehicleIdProxy).exists(vehicleId)) {
             revert InvalidVehicleId(vehicleId);
         }
 
-        // TODO Detach vehicleId if stakeId is expired?
+        uint256 attachedStakeId = $.vehicleIdToStakeId[vehicleId];
+        if (stakeId == attachedStakeId) {
+            revert VehicleAlreadyAttached(vehicleId);
+        } else if (attachedStakeId != 0) {
+            // If vehicle ID is already attached and not expired
+            if (getBaselinePoints(vehicleId) > 0) {
+                revert VehicleAlreadyAttached(vehicleId);
+            }
 
-        IStakingBeacon staking = IStakingBeacon(_getDimoStakingStorage().stakerToStake[msg.sender]);
+            // Expired Stake will have Vehicle detached
+            IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(attachedStakeId);
 
-        if (address(staking) == address(0)) {
-            revert NoActiveStaking(msg.sender);
+            emit VehicleDetached(msg.sender, attachedStakeId, vehicleId);
+        }
+
+        uint256 currentAttachedVehicleId = staking.stakingData(stakeId).vehicleId;
+        if (currentAttachedVehicleId != 0) {
+            delete $.vehicleIdToStakeId[currentAttachedVehicleId];
+            emit VehicleDetached(msg.sender, stakeId, currentAttachedVehicleId);
         }
 
         $.vehicleIdToStakeId[vehicleId] = stakeId;
@@ -316,7 +329,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             revert NoActiveStaking(msg.sender);
         }
 
-        try IERC721($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
+        try IVehicleId($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
             if (msg.sender != vehicleIdOwner && msg.sender != IStakingBeacon(stakingBeaconAddress).staker()) {
                 revert Unauthorized(msg.sender, vehicleId);
             }
@@ -326,7 +339,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         }
 
         delete $.vehicleIdToStakeId[vehicleId];
-        IStakingBeacon(stakingBeaconAddress).detachVehicle(vehicleId);
+        IStakingBeacon(stakingBeaconAddress).detachVehicle(stakeId);
 
         emit VehicleDetached(msg.sender, stakeId, vehicleId);
     }
