@@ -1,11 +1,11 @@
-export type Boost = {
+export type StakingData = {
     level: bigint
     amount: bigint
     lockEndTime: bigint
-    attachedVehicleId: bigint
+    vehicleId: bigint
 }
 
-export type BoostLevel = {
+export type StakingLevel = {
     amount: bigint
     lockPeriod: bigint
     points: bigint
