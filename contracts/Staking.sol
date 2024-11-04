@@ -434,16 +434,9 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         IStakingBeacon(stakingTo).createStakingData(tokenId, stakingDataFrom);
         stakingFrom.transferStake(tokenId, stakingTo);
 
-        emit Withdrawn(msg.sender, tokenId, stakingDataFrom.amount);
+        emit Withdrawn(from, tokenId, stakingDataFrom.amount);
 
-        emit Staked(
-            msg.sender,
-            tokenId,
-            stakingTo,
-            stakingDataFrom.level,
-            stakingDataFrom.amount,
-            stakingDataFrom.lockEndTime
-        );
+        emit Staked(to, tokenId, stakingTo, stakingDataFrom.level, stakingDataFrom.amount, stakingDataFrom.lockEndTime);
     }
 
     // TODO Documentation

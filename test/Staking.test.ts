@@ -1424,7 +1424,7 @@ describe('Staking', function () {
                     const args = event.args
 
                     expect(event.fragment.name).to.equal('Staked')
-                    expect(args[0]).to.equal(user1.address) // user
+                    expect(args[0]).to.equal(user2.address) // user
                     expect(args[1]).to.equal(1) // stakeId
                     expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
                     expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
@@ -1468,7 +1468,7 @@ describe('Staking', function () {
                     const args = event.args
 
                     expect(event.fragment.name).to.equal('Staked')
-                    expect(args[0]).to.equal(user1.address) // user
+                    expect(args[0]).to.equal(user2.address) // user
                     expect(args[1]).to.equal(1) // stakeId
                     expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
                     expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
