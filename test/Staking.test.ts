@@ -269,8 +269,8 @@ describe('Staking', function () {
                     expect(args[1]).to.equal(1) // stakeId
                     expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
                     expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
-                    expect(args[3]).to.equal(C.stakingLevels[1].amount) // amount
-                    expect(args[4]).to.equal(1) // level
+                    expect(args[3]).to.equal(1) // level
+                    expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                     expect(args[5]).to.be.closeTo(lockEndTime, 5n) // lockEndTime
                 })
                 it('Should emit VehicleAttached with correct params if Vehicle ID is set', async () => {
@@ -305,8 +305,8 @@ describe('Staking', function () {
                     expect(args[1]).to.equal(2) // stakeId
                     expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
                     expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
-                    expect(args[3]).to.equal(C.stakingLevels[1].amount) // amount
-                    expect(args[4]).to.equal(1) // level
+                    expect(args[3]).to.equal(1) // level
+                    expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                     expect(args[5]).to.be.closeTo(lockEndTime, 5n) // lockEndTime
                 })
                 it('Should emit VehicleAttached with correct params if Vehicle ID is set', async () => {
@@ -542,8 +542,8 @@ describe('Staking', function () {
                 expect(args[1]).to.equal(1) // stakeId
                 expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
                 expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
-                expect(args[3]).to.equal(C.stakingLevels[2].amount) // amount
-                expect(args[4]).to.equal(2) // level
+                expect(args[3]).to.equal(2) // level
+                expect(args[4]).to.equal(C.stakingLevels[2].amount) // amount
                 expect(args[5]).to.be.closeTo(lockEndTime, 5n) // lockEndTime
             })
             it('Should emit VehicleAttached event with correct params if Vehicle ID is set', async () => {
@@ -1428,8 +1428,8 @@ describe('Staking', function () {
                     expect(args[1]).to.equal(1) // stakeId
                     expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
                     expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
-                    expect(args[3]).to.equal(C.stakingLevels[1].amount) // amount
-                    expect(args[4]).to.equal(1) // level
+                    expect(args[3]).to.equal(1) // level
+                    expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                     expect(args[5]).to.equal(lockEndTime) // lockEndTime
                 })
             })
@@ -1472,8 +1472,8 @@ describe('Staking', function () {
                     expect(args[1]).to.equal(1) // stakeId
                     expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
                     expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
-                    expect(args[3]).to.equal(C.stakingLevels[1].amount) // amount
-                    expect(args[4]).to.equal(1) // level
+                    expect(args[3]).to.equal(1) // level
+                    expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                     expect(args[5]).to.equal(lockEndTime) // lockEndTime
                 })
             })

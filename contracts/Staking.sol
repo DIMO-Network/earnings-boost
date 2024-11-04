@@ -32,6 +32,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         uint256 points;
     }
 
+    uint8 constant MAX_STAKING_LEVEL = 2;
     bytes32 constant UPGRADER_ROLE = keccak256('UPGRADER_ROLE');
 
     // keccak256(abi.encode(uint256(keccak256("DIMOStaking.storage")) - 1)) & ~bytes32(uint256(0xff))
@@ -41,8 +42,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         address indexed user,
         uint256 indexed stakeId,
         address indexed stakingBeacon,
+        uint8 level,
         uint256 amount,
-        uint256 level,
         uint256 lockEndTime
     );
     event Withdrawn(address indexed user, uint256 indexed stakeId, uint256 amount);
@@ -50,7 +51,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     event VehicleDetached(address indexed user, uint256 indexed stakeId, uint256 indexed vehicleId);
     event StakingExtended(address indexed user, uint256 indexed stakeId, uint256 newLockEndTime);
 
-    error InvalidStakingLevel(uint256 level);
+    error InvalidStakingLevel(uint8 level);
     error TokensStillLocked(uint256 stakeId);
     error Unauthorized(address addr, uint256 vehicleId);
     error InvalidVehicleId(uint256 vehicleId);
@@ -84,10 +85,10 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
     // TODO Documentation
     // If staker has no StakingBeacon, create one and a stake ID. Otherwise, just a new stake ID
-    function stake(uint256 level, uint256 vehicleId) external {
+    function stake(uint8 level, uint256 vehicleId) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
-        if (level > 2) {
+        if (level > MAX_STAKING_LEVEL) {
             revert InvalidStakingLevel(level);
         }
 
@@ -126,8 +127,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             msg.sender,
             currentStakeId,
             stakingBeaconAddress,
-            stakingLevel.amount,
             level,
+            stakingLevel.amount,
             stakingData.lockEndTime
         );
 
@@ -156,7 +157,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     }
 
     // TODO Documentation
-    function upgradeStake(uint256 stakeId, uint256 level, uint256 vehicleId) external {
+    function upgradeStake(uint256 stakeId, uint8 level, uint256 vehicleId) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
         IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
 
@@ -166,7 +167,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
         StakingData memory stakingData = staking.stakingData(stakeId);
 
-        if (level > 2 || stakingData.level >= level) {
+        if (level > MAX_STAKING_LEVEL || stakingData.level >= level) {
             revert InvalidStakingLevel(level);
         }
 
@@ -185,7 +186,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
         staking.upgradeStake(stakeId, newStakingData);
 
-        emit Staked(msg.sender, stakeId, address(staking), newStakingData.amount, level, newStakingData.lockEndTime);
+        emit Staked(msg.sender, stakeId, address(staking), level, newStakingData.amount, newStakingData.lockEndTime);
 
         if (vehicleId != currentAttachedVehicleId) {
             if (vehicleId == 0) {
@@ -374,7 +375,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     }
 
     // TODO Documentation
-    function stakingLevels(uint256 level) external view returns (StakingLevel memory) {
+    function stakingLevels(uint8 level) external view returns (StakingLevel memory) {
         return _getDimoStakingStorage().stakingLevels[level];
     }
 
@@ -439,8 +440,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             msg.sender,
             tokenId,
             stakingTo,
-            stakingDataFrom.amount,
             stakingDataFrom.level,
+            stakingDataFrom.amount,
             stakingDataFrom.lockEndTime
         );
     }
