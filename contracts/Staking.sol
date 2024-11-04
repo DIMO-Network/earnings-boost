@@ -143,10 +143,11 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                     revert VehicleAlreadyAttached(vehicleId);
                 }
 
+                IStakingBeacon expiredStaking = IStakingBeacon($.stakeIdToStake[attachedStakeId]);
                 // Expired Stake will have Vehicle detached
-                IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(attachedStakeId);
+                expiredStaking.detachVehicle(attachedStakeId);
 
-                emit VehicleDetached(msg.sender, attachedStakeId, vehicleId);
+                emit VehicleDetached(expiredStaking.staker(), attachedStakeId, vehicleId);
             }
 
             $.vehicleIdToStakeId[vehicleId] = currentStakeId;
@@ -198,12 +199,13 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                         revert VehicleAlreadyAttached(vehicleId);
                     }
 
+                    IStakingBeacon expiredStaking = IStakingBeacon($.stakeIdToStake[attachedStakeId]);
                     // Current attached Vehicle ID will be replaced
                     delete $.vehicleIdToStakeId[currentAttachedVehicleId];
                     // Expired Stake will have Vehicle detached
-                    IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(attachedStakeId);
+                    expiredStaking.detachVehicle(attachedStakeId);
 
-                    emit VehicleDetached(msg.sender, attachedStakeId, vehicleId);
+                    emit VehicleDetached(expiredStaking.staker(), attachedStakeId, vehicleId);
                 }
 
                 $.vehicleIdToStakeId[vehicleId] = stakeId;
@@ -305,10 +307,11 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                 revert VehicleAlreadyAttached(vehicleId);
             }
 
+            IStakingBeacon expiredStaking = IStakingBeacon($.stakeIdToStake[attachedStakeId]);
             // Expired Stake will have Vehicle detached
-            IStakingBeacon($.stakeIdToStake[attachedStakeId]).detachVehicle(attachedStakeId);
+            expiredStaking.detachVehicle(attachedStakeId);
 
-            emit VehicleDetached(msg.sender, attachedStakeId, vehicleId);
+            emit VehicleDetached(expiredStaking.staker(), attachedStakeId, vehicleId);
         }
 
         uint256 currentAttachedVehicleId = staking.stakingData(stakeId).vehicleId;

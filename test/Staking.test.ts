@@ -327,7 +327,7 @@ describe('Staking', function () {
 
                     await expect(dimoStaking.connect(user1).stake(1, 0)).to.not.emit(dimoStaking, 'VehicleAttached')
                 })
-                it('Should emit VehicleDetached with correct params if it was attached to an expired stake', async () => {
+                it('Should emit VehicleDetached with correct params if it was attached to an expired stake of the caller', async () => {
                     const { dimoStaking, user1 } = await loadFixture(setup)
 
                     await dimoStaking.connect(user1).stake(1, 1)
@@ -337,6 +337,18 @@ describe('Staking', function () {
                     await expect(dimoStaking.connect(user1).stake(1, 1))
                         .to.emit(dimoStaking, 'VehicleDetached')
                         .withArgs(user1.address, 1, 1)
+                })
+                it('Should emit VehicleDetached with correct params if it was attached to an expired stake of another user', async () => {
+                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                    await dimoStaking.connect(user1).stake(1, 1)
+                    await dimoStaking.connect(user2).stake(1, 2)
+
+                    await time.increase(C.stakingLevels[1].lockPeriod + 99n)
+
+                    await expect(dimoStaking.connect(user1).stake(1, 2))
+                        .to.emit(dimoStaking, 'VehicleDetached')
+                        .withArgs(user2.address, 2, 2)
                 })
             })
         })
@@ -575,7 +587,7 @@ describe('Staking', function () {
                     'VehicleAttached'
                 )
             })
-            it('Should emit VehicleDetached with correct params if it was attached to an expired stake', async () => {
+            it('Should emit VehicleDetached with correct params if it was attached to an expired stake of the caller', async () => {
                 const { dimoStaking, user1, mockVehicleId } = await loadFixture(setup)
 
                 // Mint another vehicle for user1 with ID 3
@@ -590,6 +602,19 @@ describe('Staking', function () {
                 await expect(dimoStaking.connect(user1).upgradeStake(2, 2, 1))
                     .to.emit(dimoStaking, 'VehicleDetached')
                     .withArgs(user1.address, 1, 1)
+            })
+            it('Should emit VehicleDetached with correct params if it was attached to an expired stake of another user', async () => {
+                const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                await dimoStaking.connect(user1).stake(1, 1) // Stake ID 1
+                await dimoStaking.connect(user2).stake(1, 2) // Stake ID 2
+
+                await time.increase(C.stakingLevels[1].lockPeriod + 99n)
+
+                // To reattache Vehicle 1 from stake ID 1
+                await expect(dimoStaking.connect(user1).upgradeStake(1, 2, 2))
+                    .to.emit(dimoStaking, 'VehicleDetached')
+                    .withArgs(user2.address, 2, 2)
             })
         })
     })
@@ -970,7 +995,22 @@ describe('Staking', function () {
                     .to.emit(dimoStaking, 'VehicleAttached')
                     .withArgs(user1.address, 1, 1)
             })
-            it('Should emit VehicleDetached with correct params if it was attached to an expired stake', async () => {
+            it('Should emit VehicleDetached with correct params if it was attached to an expired stake of the caller', async () => {
+                const { dimoStaking, user1, mockVehicleId } = await loadFixture(setup)
+
+                // Mint another vehicle for user1 with ID 3
+                await mockVehicleId.mint(user1.address)
+
+                await dimoStaking.connect(user1).stake(1, 1)
+                await dimoStaking.connect(user1).stake(1, 3)
+
+                await time.increase(C.stakingLevels[1].lockPeriod + 99n)
+
+                await expect(dimoStaking.connect(user1).attachVehicle(1, 3))
+                    .to.emit(dimoStaking, 'VehicleDetached')
+                    .withArgs(user1.address, 2, 3)
+            })
+            it('Should emit VehicleDetached with correct params if it was attached to an expired stake of another user', async () => {
                 const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
                 await dimoStaking.connect(user1).stake(1, 0)
@@ -980,7 +1020,7 @@ describe('Staking', function () {
 
                 await expect(dimoStaking.connect(user1).attachVehicle(1, 2))
                     .to.emit(dimoStaking, 'VehicleDetached')
-                    .withArgs(user1.address, 2, 2)
+                    .withArgs(user2.address, 2, 2)
             })
             it('Should emit VehicleDetached with correct params if there was another Vehicle ID already attached', async () => {
                 const { dimoStaking, mockVehicleId, user1 } = await loadFixture(setup)
