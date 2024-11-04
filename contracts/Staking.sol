@@ -32,7 +32,6 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         uint256 points;
     }
 
-    bytes32 constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
     bytes32 constant UPGRADER_ROLE = keccak256('UPGRADER_ROLE');
 
     // keccak256(abi.encode(uint256(keccak256("DIMOStaking.storage")) - 1)) & ~bytes32(uint256(0xff))
@@ -70,6 +69,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         __UUPSUpgradeable_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(UPGRADER_ROLE, msg.sender);
 
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
