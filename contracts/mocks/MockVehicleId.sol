@@ -15,4 +15,12 @@ contract MockVehicleId is ERC721 {
     function mint(address account) external {
         _mint(account, ++tokenCount);
     }
+
+    function burn(uint256 tokenId) external {
+        _burn(tokenId);
+    }
+
+    function exists(uint256 tokenId) external view returns (bool) {
+        return _exists(tokenId);
+    }
 }

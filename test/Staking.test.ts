@@ -23,7 +23,9 @@ describe('Staking', function () {
         })) as unknown as StakingModule
 
         await mockDimoToken.mint(user1.address, amount)
+        await mockDimoToken.mint(user2.address, amount)
         await mockDimoToken.connect(user1).approve(await dimoStaking.getAddress(), amount)
+        await mockDimoToken.connect(user2).approve(await dimoStaking.getAddress(), amount)
         await mockVehicleId.mint(user1.address)
         await mockVehicleId.mint(user2.address)
 
@@ -95,13 +97,6 @@ describe('Staking', function () {
 
                 await expect(dimoStaking.connect(user1).stake(1, 2)).to.be.revertedWith('ERC20: insufficient allowance')
             })
-            it('Should revert if caller is not the vehicle ID owner', async () => {
-                const { dimoStaking, user1 } = await loadFixture(setup)
-
-                await expect(dimoStaking.connect(user1).stake(1, 2))
-                    .to.be.revertedWithCustomError(dimoStaking, 'Unauthorized')
-                    .withArgs(user1.address, 2)
-            })
             it('Should revert if vehicle ID is already attached', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
 
@@ -142,10 +137,8 @@ describe('Staking', function () {
                     expect(stakingData.lockEndTime).to.be.closeTo(lockEndTime, 5n)
                     expect(stakingData.vehicleId).to.equal(1)
                 })
-                it('Should not set vehicle ID in the Staking Beacon contract if this parameter is 0', async () => {
+                it('Should not set vehicle ID if this parameter is 0', async () => {
                     const { dimoStaking, user1 } = await loadFixture(setup)
-
-                    expect(await dimoStaking.stakerToStake(user1.address)).to.equal(ethers.ZeroAddress)
 
                     const receipt = await (await dimoStaking.connect(user1).stake(1, 0)).wait()
                     const eventArgs = (receipt?.logs[2] as EventLog).args
@@ -410,15 +403,6 @@ describe('Staking', function () {
                     .to.be.revertedWithCustomError(dimoStaking, 'VehicleAlreadyAttached')
                     .withArgs(3)
             })
-            it('Should revert if caller is not the vehicle ID owner', async () => {
-                const { dimoStaking, user1 } = await loadFixture(setup)
-
-                await dimoStaking.connect(user1).stake(1, 1)
-
-                await expect(dimoStaking.connect(user1).upgradeStake(1, 2, 2))
-                    .to.be.revertedWithCustomError(dimoStaking, 'Unauthorized')
-                    .withArgs(user1.address, 2)
-            })
             it('Should revert if vehicle ID does not exist', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
 
@@ -480,6 +464,23 @@ describe('Staking', function () {
 
                 expect(stakerBalanceAfter).to.equal(stakerBalanceBefore - amountDiff)
                 expect(beaconBalanceAfter).to.equal(beaconBalanceBefore + amountDiff)
+            })
+            it('Should erase vehicle ID if this parameter is 0', async () => {
+                const { dimoStaking, user1 } = await loadFixture(setup)
+
+                await dimoStaking.connect(user1).stake(1, 1)
+                const stakingBeaconAddress = await dimoStaking.stakerToStake(user1.address)
+                const stakingBeacon = await ethers.getContractAt('StakingBeacon', stakingBeaconAddress)
+
+                expect(await dimoStaking.vehicleIdToStakeId(1)).to.equal(1)
+
+                await dimoStaking.connect(user1).upgradeStake(1, 2, 0)
+
+                const stakingData = await stakingBeacon.stakingData(1)
+                const stakeIdByVehicleId = await dimoStaking.vehicleIdToStakeId(1)
+
+                expect(stakingData.vehicleId).to.equal(0)
+                expect(stakeIdByVehicleId).to.equal(0)
             })
             it('Should reattach Vehicle ID if it was attached to an expired stake', async () => {
                 const { dimoStaking, user1, mockVehicleId } = await loadFixture(setup)
@@ -882,28 +883,24 @@ describe('Staking', function () {
                     .to.be.revertedWithCustomError(dimoStaking, 'InvalidVehicleId')
                     .withArgs(99)
             })
-            it('Should revert if staker is not the vehicle ID owner', async () => {
+            it('Should revert if vehicle ID is already attached to the same stake ID', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
 
                 await dimoStaking.connect(user1).stake(1, 1)
 
-                await expect(dimoStaking.connect(user1).attachVehicle(1, 2))
-                    .to.be.revertedWithCustomError(dimoStaking, 'Unauthorized')
-                    .withArgs(user1.address, 2)
-            })
-            it('Should revert if vehicle ID is already attached', async () => {
-                const { dimoStaking, mockVehicleId, user1 } = await loadFixture(setup)
-
-                // Mint another vehicle for user1 with IDs 3 and 4
-                await mockVehicleId.mint(user1.address)
-                await mockVehicleId.mint(user1.address)
-
-                await dimoStaking.connect(user1).stake(1, 0) // stake ID 1
-                await dimoStaking.connect(user1).stake(1, 3) // stake ID 2
-
-                await expect(dimoStaking.connect(user1).attachVehicle(1, 3))
+                await expect(dimoStaking.connect(user1).attachVehicle(1, 1))
                     .to.be.revertedWithCustomError(dimoStaking, 'VehicleAlreadyAttached')
-                    .withArgs(3)
+                    .withArgs(1)
+            })
+            it('Should revert if vehicle ID is already attached to another active stake ID', async () => {
+                const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                await dimoStaking.connect(user1).stake(1, 1) // stake ID 1
+                await dimoStaking.connect(user2).stake(1, 2) // stake ID 2
+
+                await expect(dimoStaking.connect(user1).attachVehicle(1, 2))
+                    .to.be.revertedWithCustomError(dimoStaking, 'VehicleAlreadyAttached')
+                    .withArgs(2)
             })
         })
 
@@ -915,13 +912,51 @@ describe('Staking', function () {
                 const stakingBeaconAddress = await dimoStaking.stakerToStake(user1.address)
                 const stakingBeacon = await ethers.getContractAt('StakingBeacon', stakingBeaconAddress)
                 const stakingDataBefore = await stakingBeacon.stakingData(1)
+                const stakeIdByVehicleIdBefore = await dimoStaking.vehicleIdToStakeId(1)
+                expect(stakeIdByVehicleIdBefore).to.equal(0)
 
                 expect(stakingDataBefore.vehicleId).to.equal(0)
 
                 await dimoStaking.connect(user1).attachVehicle(1, 1)
 
                 const stakingDataAfter = await stakingBeacon.stakingData(1)
+                const stakeIdByVehicleId = await dimoStaking.vehicleIdToStakeId(1)
                 expect(stakingDataAfter.vehicleId).to.equal(1)
+                expect(stakeIdByVehicleId).to.equal(1)
+            })
+            it('Should reattach Vehicle ID if it was attached to an expired stake', async () => {
+                const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                await dimoStaking.connect(user1).stake(1, 1)
+                await dimoStaking.connect(user2).stake(1, 2)
+
+                const stakingBeaconAddress1 = await dimoStaking.stakerToStake(user1.address)
+                const stakingBeaconAddress2 = await dimoStaking.stakerToStake(user2.address)
+                const stakingBeacon1 = await ethers.getContractAt('StakingBeacon', stakingBeaconAddress1)
+                const stakingBeacon2 = await ethers.getContractAt('StakingBeacon', stakingBeaconAddress2)
+                const stakingDataBefore1 = await stakingBeacon1.stakingData(1)
+                const stakingDataBefore2 = await stakingBeacon2.stakingData(2)
+                const stakeIdByVehicleIdBefore1 = await dimoStaking.vehicleIdToStakeId(1)
+                const stakeIdByVehicleIdBefore2 = await dimoStaking.vehicleIdToStakeId(2)
+
+                expect(stakingDataBefore1.vehicleId).to.equal(1)
+                expect(stakeIdByVehicleIdBefore1).to.equal(1)
+                expect(stakingDataBefore2.vehicleId).to.equal(2)
+                expect(stakeIdByVehicleIdBefore2).to.equal(2)
+
+                await time.increase(C.stakingLevels[1].lockPeriod + 99n)
+
+                await dimoStaking.connect(user1).attachVehicle(1, 2)
+
+                const stakingDataAfter1 = await stakingBeacon1.stakingData(1)
+                const stakingDataAfter2 = await stakingBeacon2.stakingData(2)
+                const stakeIdByVehicleId1 = await dimoStaking.vehicleIdToStakeId(1)
+                const stakeIdByVehicleId2 = await dimoStaking.vehicleIdToStakeId(2)
+
+                expect(stakingDataAfter1.vehicleId).to.equal(2) // Stake ID 1 attached to expired Vehicle ID 2
+                expect(stakeIdByVehicleId1).to.equal(0) // Previous Vehicle ID 1 detached
+                expect(stakingDataAfter2.vehicleId).to.equal(0) // Expired Vehicle ID 2 detached from Stake ID 2
+                expect(stakeIdByVehicleId2).to.equal(1) // Expired Vehicle ID 2 attached to Stake ID 1
             })
         })
 
@@ -935,11 +970,34 @@ describe('Staking', function () {
                     .to.emit(dimoStaking, 'VehicleAttached')
                     .withArgs(user1.address, 1, 1)
             })
+            it('Should emit VehicleDetached with correct params if it was attached to an expired stake', async () => {
+                const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                await dimoStaking.connect(user1).stake(1, 0)
+                await dimoStaking.connect(user2).stake(1, 2)
+
+                await time.increase(C.stakingLevels[1].lockPeriod + 99n)
+
+                await expect(dimoStaking.connect(user1).attachVehicle(1, 2))
+                    .to.emit(dimoStaking, 'VehicleDetached')
+                    .withArgs(user1.address, 2, 2)
+            })
+            it('Should emit VehicleDetached with correct params if there was another Vehicle ID already attached', async () => {
+                const { dimoStaking, mockVehicleId, user1 } = await loadFixture(setup)
+
+                // Mint another vehicle for user1 with ID 3
+                await mockVehicleId.mint(user1.address)
+
+                await dimoStaking.connect(user1).stake(1, 1)
+
+                await expect(dimoStaking.connect(user1).attachVehicle(1, 3))
+                    .to.emit(dimoStaking, 'VehicleDetached')
+                    .withArgs(user1.address, 1, 1)
+            })
         })
     })
 
     describe('detachVehicle', () => {
-        // TODO Separate tests in context if we allow caller to be the staker and the vehicle ID owner
         context('Errors', () => {
             it('Should revert if stake ID has no vehicle ID attached', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
@@ -959,35 +1017,88 @@ describe('Staking', function () {
                     .to.be.revertedWithCustomError(dimoStaking, 'Unauthorized')
                     .withArgs(user2.address, 1)
             })
+            it('Should revert if vehicle ID has been burned', async () => {
+                const { dimoStaking, mockVehicleId, user1 } = await loadFixture(setup)
+
+                await dimoStaking.connect(user1).stake(1, 1)
+
+                await mockVehicleId.burn(1)
+
+                await expect(dimoStaking.connect(user1).detachVehicle(1))
+                    .to.be.revertedWithCustomError(dimoStaking, 'InvalidVehicleId')
+                    .withArgs(1)
+            })
         })
 
         context('State', () => {
-            it('Should detach a vehicle ID', async () => {
-                const { dimoStaking, user1 } = await loadFixture(setup)
+            context('Staker is the caller', () => {
+                it('Should detach a Vehicle ID', async () => {
+                    const { dimoStaking, user1 } = await loadFixture(setup)
 
-                await dimoStaking.connect(user1).stake(1, 1)
-                const stakingBeaconAddress = await dimoStaking.stakerToStake(user1.address)
-                const stakingBeacon = await ethers.getContractAt('StakingBeacon', stakingBeaconAddress)
-                const stakingDataBefore = await stakingBeacon.stakingData(1)
+                    await dimoStaking.connect(user1).stake(1, 1)
+                    const stakingBeaconAddress = await dimoStaking.stakerToStake(user1.address)
+                    const stakingBeacon = await ethers.getContractAt('StakingBeacon', stakingBeaconAddress)
+                    const stakingDataBefore = await stakingBeacon.stakingData(1)
+                    const stakeIdByVehicleIdBefore = await dimoStaking.vehicleIdToStakeId(1)
 
-                expect(stakingDataBefore.vehicleId).to.equal(1)
+                    expect(stakingDataBefore.vehicleId).to.equal(1)
+                    expect(stakeIdByVehicleIdBefore).to.equal(1)
 
-                await dimoStaking.connect(user1).detachVehicle(1)
+                    await dimoStaking.connect(user1).detachVehicle(1)
 
-                const stakingDataAfter = await stakingBeacon.stakingData(1)
-                expect(stakingDataAfter.vehicleId).to.equal(0)
+                    const stakingDataAfter = await stakingBeacon.stakingData(1)
+                    const stakeIdByVehicleIdAfter = await dimoStaking.vehicleIdToStakeId(1)
+                    expect(stakingDataAfter.vehicleId).to.equal(0)
+                    expect(stakeIdByVehicleIdAfter).to.equal(0)
+                })
+            })
+
+            context('Vehicle ID ower is the caller', () => {
+                it('Should detach a Vehicle ID', async () => {
+                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                    await dimoStaking.connect(user1).stake(1, 2) // Vehicle ID 2 belongs to user2
+                    const stakingBeaconAddress = await dimoStaking.stakerToStake(user1.address)
+                    const stakingBeacon = await ethers.getContractAt('StakingBeacon', stakingBeaconAddress)
+                    const stakingDataBefore = await stakingBeacon.stakingData(1)
+                    const stakeIdByVehicleIdBefore = await dimoStaking.vehicleIdToStakeId(2)
+
+                    expect(stakingDataBefore.vehicleId).to.equal(2)
+                    expect(stakeIdByVehicleIdBefore).to.equal(1)
+
+                    await dimoStaking.connect(user2).detachVehicle(2)
+
+                    const stakingDataAfter = await stakingBeacon.stakingData(1)
+                    const stakeIdByVehicleIdAfter = await dimoStaking.vehicleIdToStakeId(1)
+                    expect(stakingDataAfter.vehicleId).to.equal(0)
+                    expect(stakeIdByVehicleIdAfter).to.equal(0)
+                })
             })
         })
 
         context('Events', () => {
-            it('Should emit VehicleDetached event with correct params', async () => {
-                const { dimoStaking, user1 } = await loadFixture(setup)
+            context('Staker is the caller', () => {
+                it('Should emit VehicleDetached event with correct params', async () => {
+                    const { dimoStaking, user1 } = await loadFixture(setup)
 
-                await dimoStaking.connect(user1).stake(1, 1)
+                    await dimoStaking.connect(user1).stake(1, 1)
 
-                await expect(dimoStaking.connect(user1).detachVehicle(1))
-                    .to.emit(dimoStaking, 'VehicleDetached')
-                    .withArgs(user1.address, 1, 1)
+                    await expect(dimoStaking.connect(user1).detachVehicle(1))
+                        .to.emit(dimoStaking, 'VehicleDetached')
+                        .withArgs(user1.address, 1, 1)
+                })
+            })
+
+            context('Vehicle ID ower is the caller', () => {
+                it('Should emit VehicleDetached event with correct params', async () => {
+                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                    await dimoStaking.connect(user1).stake(1, 2) // Vehicle ID 2 belongs to user2
+
+                    await expect(dimoStaking.connect(user2).detachVehicle(2))
+                        .to.emit(dimoStaking, 'VehicleDetached')
+                        .withArgs(user2.address, 1, 2)
+                })
             })
         })
     })
@@ -1056,7 +1167,18 @@ describe('Staking', function () {
 
             expect(await dimoStaking.getBaselinePoints(1)).to.equal(0)
         })
-        it('Should return 0 Stake is expired', async () => {
+        it('Should return 0 if Vehicle has been burned', async () => {
+            const { dimoStaking, mockVehicleId, user1 } = await loadFixture(setup)
+
+            await dimoStaking.connect(user1).stake(1, 1)
+
+            expect(await dimoStaking.getBaselinePoints(1)).to.equal(C.stakingLevels[1].points)
+
+            await mockVehicleId.burn(1)
+
+            expect(await dimoStaking.getBaselinePoints(1)).to.equal(0)
+        })
+        it('Should return 0 if Stake is expired', async () => {
             const { dimoStaking, user1 } = await loadFixture(setup)
 
             await dimoStaking.connect(user1).stake(1, 1)
