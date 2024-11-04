@@ -120,6 +120,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             'Transfer failed'
         );
 
+        _safeMint(msg.sender, currentStakeId);
+
         emit Staked(
             msg.sender,
             currentStakeId,
@@ -409,6 +411,35 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             return 0;
 
         return $.stakingLevels[stakingData.level].points;
+    }
+
+    // TODO Documentation
+    function transferFrom(address from, address to, uint256 tokenId) public override {
+        super.transferFrom(from, to, tokenId);
+
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+        address stakingTo = $.stakerToStake[to];
+
+        if (stakingTo == address(0)) {
+            revert NoActiveStaking(to);
+        }
+
+        IStakingBeacon stakingFrom = IStakingBeacon($.stakeIdToStake[tokenId]);
+        StakingData memory stakingDataFrom = stakingFrom.stakingData(tokenId);
+
+        IStakingBeacon(stakingTo).createStakingData(tokenId, stakingDataFrom);
+        stakingFrom.transferStake(tokenId, stakingTo);
+
+        emit Withdrawn(msg.sender, tokenId, stakingDataFrom.amount);
+
+        emit Staked(
+            msg.sender,
+            tokenId,
+            stakingTo,
+            stakingDataFrom.amount,
+            stakingDataFrom.level,
+            stakingDataFrom.lockEndTime
+        );
     }
 
     // TODO Documentation

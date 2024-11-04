@@ -16,6 +16,8 @@ interface IStakingBeacon {
 
     function detachVehicle(uint256 stakeId) external;
 
+    function transferStake(uint256 stakeId, address to) external;
+
     function delegate(address delegatee) external;
 
     function staker() external view returns (address);

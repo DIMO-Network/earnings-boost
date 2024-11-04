@@ -107,6 +107,18 @@ describe('StakingBeacon', function () {
         })
     })
 
+    describe('transferStake', () => {
+        context('Errors', () => {
+            it('Should revert if caller is not the DIMO Staking contract', async () => {
+                const { stakingBeacon1, user1, user2 } = await loadFixture(setup)
+
+                await expect(stakingBeacon1.connect(user1).transferStake(1, user2.address))
+                    .to.be.revertedWithCustomError(stakingBeacon1, 'Unauthorized')
+                    .withArgs(user1.address)
+            })
+        })
+    })
+
     describe('delegate', () => {
         context('Errors', () => {
             it('Should revert if caller is not the DIMO Staking contract or the staker', async () => {

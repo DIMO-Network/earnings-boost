@@ -107,6 +107,12 @@ contract StakingBeacon {
         delete stakingData[stakeId].vehicleId;
     }
 
+    // TODO Documentation find a better name
+    function transferStake(uint256 stakeId, address to) external onlyDimoStaking {
+        require(IERC20(dimoToken).transfer(to, stakingData[stakeId].amount), 'Transfer failed');
+        delete stakingData[stakeId];
+    }
+
     // TODO Documentation
     function delegate(address delegatee) external {
         if (msg.sender != dimoStaking && msg.sender != staker) {
