@@ -1366,6 +1366,7 @@ describe('Staking', function () {
                         expect(ethers.isAddress(stakingBeaconAddressAfter)).to.be.true
                         expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
                         expect(await dimoStaking.stakerToStake(user2.address)).to.equal(stakingBeaconAddressAfter)
+                        expect(stakingBeaconAddressAfter).to.not.equal(stakingBeaconAddressBefore)
                     })
                     it('Should transfer map the Stake ID to the Staking Beacon address of the new user', async () => {
                         const { dimoStaking, user1, user2 } = await loadFixture(setup)
@@ -1427,6 +1428,7 @@ describe('Staking', function () {
                         expect(ethers.isAddress(stakingBeaconAddressAfter)).to.be.true
                         expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
                         expect(await dimoStaking.stakerToStake(user2.address)).to.equal(stakingBeaconAddressAfter)
+                        expect(stakingBeaconAddressAfter).to.not.equal(stakingBeaconAddressBefore)
                     })
                     it('Should transfer map the Stake ID to the Staking Beacon address of the new user', async () => {
                         const { dimoStaking, user1, user2 } = await loadFixture(setup)
