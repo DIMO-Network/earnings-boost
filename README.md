@@ -5,11 +5,11 @@ The DIMO Staking contracts implement a system for users to lock up their DIMO to
 
 ## How it Works
 The DIMO Staking system employs several key components:
-    * [`DIMOStaking`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/Staking.sol) contract: This contract is the primary entry point for users to interact with the staking system. It manages staking levels, stake creation, upgrades, withdrawals, vehicle attachments, and delegations.
-    * [`StakingBeacon`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/StakingBeacon.sol) contract: Each user who stakes DIMO tokens has an associated `StakingBeacon` contract. This contract holds the staked tokens and facilitates token transfers during withdrawals and stake transfers.
-    * [`IERC20Votes`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/interfaces/IERC20Votes.sol) interface: This interface defines the DIMO token as an ERC20 token with voting capabilities. Users can delegate their voting power to other addresses, even while their tokens are staked.
-    * [`IVehicleId`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/interfaces/IVehicleId.sol) interface: This interface interacts with the [Vehicle ID](https://github.com/DIMO-Network/dimo-identity/blob/main/contracts/NFTs/VehicleId.sol) contract, allowing users to attach their stakes to specific vehicles. This enables per-vehicle rewards boosts as described in DIP-2.
-    * [`Types`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/Types.sol): This file defines common data structures used within the staking system, such as `StakingData` and `StakingLevel`.
+   * [`DIMOStaking`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/Staking.sol) contract: This contract is the primary entry point for users to interact with the staking system. It manages staking levels, stake creation, upgrades, withdrawals, vehicle attachments, and delegations.
+   * [`StakingBeacon`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/StakingBeacon.sol) contract: Each user who stakes DIMO tokens has an associated `StakingBeacon` contract. This contract holds the staked tokens and facilitates token transfers during withdrawals and stake transfers.
+   * [`IERC20Votes`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/interfaces/IERC20Votes.sol) interface: This interface defines the DIMO token as an ERC20 token with voting capabilities. Users can delegate their voting power to other addresses, even while their tokens are staked.
+   * [`IVehicleId`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/interfaces/IVehicleId.sol) interface: This interface interacts with the [Vehicle ID](https://github.com/DIMO-Network/dimo-identity/blob/main/contracts/NFTs/VehicleId.sol) contract, allowing users to attach their stakes to specific vehicles. This enables per-vehicle rewards boosts as described in DIP-2.
+   * [`Types`](https://github.com/DIMO-Network/earnings-boost/blob/main/contracts/Types.sol): This file defines common data structures used within the staking system, such as `StakingData` and `StakingLevel`.
 
 ## Staking Process:
 1. Users stake DIMO tokens by calling the `stake` function in the `DIMOStaking` contract.
