@@ -1257,198 +1257,374 @@ describe('Staking', function () {
     })
 
     context('On transfer', () => {
-        context('Errors', () => {
-            context('transferFrom', () => {
-                it('Should revert if receiver does not have a Staking Beacon', async () => {
-                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
+        context('State', () => {
+            context('When recipient already has a Staking Beacon', () => {
+                context('transferFrom', () => {
+                    it('Should transfer map the Stake ID to the Staking Beacon address of the new user', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    await dimoStaking.connect(user1).stake(1, 1)
+                        const receipt1 = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
+                        const eventArgs1 = (receipt1?.logs[3] as EventLog).args
+                        const stakingBeaconAddress1 = eventArgs1[2]
+                        const receipt2 = await (await dimoStaking.connect(user2).stake(1, 2)).wait()
+                        const eventArgs2 = (receipt2?.logs[3] as EventLog).args
+                        const stakingBeaconAddress2 = eventArgs2[2]
 
-                    await expect(dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1))
-                        .to.be.revertedWithCustomError(dimoStaking, 'NoActiveStaking')
-                        .withArgs(user2.address)
+                        const stakingBeaconAddressBefore = await dimoStaking.stakeIdToStake(1)
+                        expect(stakingBeaconAddressBefore).to.equal(stakingBeaconAddress1)
+
+                        await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
+
+                        const stakingBeaconAddressAfter = await dimoStaking.stakeIdToStake(1)
+                        expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
+                    })
+                    it('Should transfer the amount of tokens to the new user', async () => {
+                        const { dimoStaking, mockDimoToken, user1, user2 } = await loadFixture(setup)
+
+                        await dimoStaking.connect(user1).stake(1, 1)
+                        await dimoStaking.connect(user2).stake(1, 2)
+
+                        const stakingBeaconAddress1 = await dimoStaking.stakerToStake(user1.address)
+                        const stakingBeaconAddress2 = await dimoStaking.stakerToStake(user2.address)
+
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(C.stakingLevels[1].amount)
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(C.stakingLevels[1].amount)
+
+                        await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
+
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(0)
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(
+                            C.stakingLevels[1].amount * 2n
+                        )
+                    })
                 })
-            })
 
-            context('safeTransferFrom', () => {
-                it('Should revert if receiver does not have a Staking Beacon', async () => {
-                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
+                context('safeTransferFrom', () => {
+                    it('Should transfer map the Stake ID to the Staking Beacon address of the new user', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    await dimoStaking.connect(user1).stake(1, 1)
+                        const receipt1 = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
+                        const eventArgs1 = (receipt1?.logs[3] as EventLog).args
+                        const stakingBeaconAddress1 = eventArgs1[2]
+                        const receipt2 = await (await dimoStaking.connect(user2).stake(1, 2)).wait()
+                        const eventArgs2 = (receipt2?.logs[3] as EventLog).args
+                        const stakingBeaconAddress2 = eventArgs2[2]
 
-                    await expect(
-                        dimoStaking
+                        const stakingBeaconAddressBefore = await dimoStaking.stakeIdToStake(1)
+                        expect(stakingBeaconAddressBefore).to.equal(stakingBeaconAddress1)
+
+                        await dimoStaking
                             .connect(user1)
                             ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
-                    )
-                        .to.be.revertedWithCustomError(dimoStaking, 'NoActiveStaking')
-                        .withArgs(user2.address)
-                })
-            })
-        })
 
-        context('State', () => {
-            context('transferFrom', () => {
-                it('Should transfer map the Stake ID to the Staking Beacon address of the new user', async () => {
-                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
+                        const stakingBeaconAddressAfter = await dimoStaking.stakeIdToStake(1)
+                        expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
+                    })
+                    it('Should transfer the amount of tokens to the new user', async () => {
+                        const { dimoStaking, mockDimoToken, user1, user2 } = await loadFixture(setup)
 
-                    const receipt1 = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const eventArgs1 = (receipt1?.logs[3] as EventLog).args
-                    const stakingBeaconAddress1 = eventArgs1[2]
-                    const receipt2 = await (await dimoStaking.connect(user2).stake(1, 2)).wait()
-                    const eventArgs2 = (receipt2?.logs[3] as EventLog).args
-                    const stakingBeaconAddress2 = eventArgs2[2]
+                        await dimoStaking.connect(user1).stake(1, 1)
+                        await dimoStaking.connect(user2).stake(1, 2)
 
-                    const stakingBeaconAddressBefore = await dimoStaking.stakeIdToStake(1)
-                    expect(stakingBeaconAddressBefore).to.equal(stakingBeaconAddress1)
+                        const stakingBeaconAddress1 = await dimoStaking.stakerToStake(user1.address)
+                        const stakingBeaconAddress2 = await dimoStaking.stakerToStake(user2.address)
 
-                    await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(C.stakingLevels[1].amount)
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(C.stakingLevels[1].amount)
 
-                    const stakingBeaconAddressAfter = await dimoStaking.stakeIdToStake(1)
-                    expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
-                })
-                it('Should transfer the amount of tokens to the new user', async () => {
-                    const { dimoStaking, mockDimoToken, user1, user2 } = await loadFixture(setup)
+                        await dimoStaking
+                            .connect(user1)
+                            ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
 
-                    await dimoStaking.connect(user1).stake(1, 1)
-                    await dimoStaking.connect(user2).stake(1, 2)
-
-                    const stakingBeaconAddress1 = await dimoStaking.stakerToStake(user1.address)
-                    const stakingBeaconAddress2 = await dimoStaking.stakerToStake(user2.address)
-
-                    expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(C.stakingLevels[1].amount)
-                    expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(C.stakingLevels[1].amount)
-
-                    await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
-
-                    expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(0)
-                    expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(
-                        C.stakingLevels[1].amount * 2n
-                    )
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(0)
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(
+                            C.stakingLevels[1].amount * 2n
+                        )
+                    })
                 })
             })
 
-            context('safeTransferFrom', () => {
-                it('Should transfer map the Stake ID to the Staking Beacon address of the new user', async () => {
-                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
+            context('When recipient does not have a Staking Beacon', () => {
+                context('transferFrom', () => {
+                    it('Should correctly create a new Staking Beacon contract', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    const receipt1 = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
-                    const eventArgs1 = (receipt1?.logs[3] as EventLog).args
-                    const stakingBeaconAddress1 = eventArgs1[2]
-                    const receipt2 = await (await dimoStaking.connect(user2).stake(1, 2)).wait()
-                    const eventArgs2 = (receipt2?.logs[3] as EventLog).args
-                    const stakingBeaconAddress2 = eventArgs2[2]
+                        await dimoStaking.connect(user1).stake(1, 1)
 
-                    const stakingBeaconAddressBefore = await dimoStaking.stakeIdToStake(1)
-                    expect(stakingBeaconAddressBefore).to.equal(stakingBeaconAddress1)
+                        const stakingBeaconAddressBefore = await dimoStaking.stakerToStake(user2.address)
+                        expect(stakingBeaconAddressBefore).to.equal(ethers.ZeroAddress)
 
-                    await dimoStaking
-                        .connect(user1)
-                        ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
+                        const receipt2 = await (
+                            await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
+                        ).wait()
+                        const eventArgs2 = (receipt2?.logs[3] as EventLog).args
+                        const stakingBeaconAddress2 = eventArgs2[2]
 
-                    const stakingBeaconAddressAfter = await dimoStaking.stakeIdToStake(1)
-                    expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
+                        const stakingBeaconAddressAfter = await dimoStaking.stakeIdToStake(1)
+                        expect(ethers.isAddress(stakingBeaconAddressAfter)).to.be.true
+                        expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
+                        expect(await dimoStaking.stakerToStake(user2.address)).to.equal(stakingBeaconAddressAfter)
+                    })
+                    it('Should transfer map the Stake ID to the Staking Beacon address of the new user', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                        const receipt1 = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
+                        const eventArgs1 = (receipt1?.logs[3] as EventLog).args
+                        const stakingBeaconAddress1 = eventArgs1[2]
+
+                        const stakingBeaconAddressBefore = await dimoStaking.stakeIdToStake(1)
+                        expect(stakingBeaconAddressBefore).to.equal(stakingBeaconAddress1)
+
+                        const receipt2 = await (
+                            await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
+                        ).wait()
+                        const eventArgs2 = (receipt2?.logs[3] as EventLog).args
+                        const stakingBeaconAddress2 = eventArgs2[2]
+
+                        const stakingBeaconAddressAfter = await dimoStaking.stakeIdToStake(1)
+                        expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
+                    })
+                    it('Should transfer the amount of tokens to the new user', async () => {
+                        const { dimoStaking, mockDimoToken, user1, user2 } = await loadFixture(setup)
+
+                        await dimoStaking.connect(user1).stake(1, 1)
+
+                        const stakingBeaconAddress1 = await dimoStaking.stakerToStake(user1.address)
+
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(C.stakingLevels[1].amount)
+
+                        const receipt2 = await (
+                            await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
+                        ).wait()
+                        const eventArgs2 = (receipt2?.logs[3] as EventLog).args
+                        const stakingBeaconAddress2 = eventArgs2[2]
+
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(0)
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(C.stakingLevels[1].amount)
+                    })
                 })
-                it('Should transfer the amount of tokens to the new user', async () => {
-                    const { dimoStaking, mockDimoToken, user1, user2 } = await loadFixture(setup)
 
-                    await dimoStaking.connect(user1).stake(1, 1)
-                    await dimoStaking.connect(user2).stake(1, 2)
+                context('safeTransferFrom', () => {
+                    it('Should correctly create a new Staking Beacon contract', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    const stakingBeaconAddress1 = await dimoStaking.stakerToStake(user1.address)
-                    const stakingBeaconAddress2 = await dimoStaking.stakerToStake(user2.address)
+                        await dimoStaking.connect(user1).stake(1, 1)
 
-                    expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(C.stakingLevels[1].amount)
-                    expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(C.stakingLevels[1].amount)
+                        const stakingBeaconAddressBefore = await dimoStaking.stakerToStake(user2.address)
+                        expect(stakingBeaconAddressBefore).to.equal(ethers.ZeroAddress)
 
-                    await dimoStaking
-                        .connect(user1)
-                        ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
+                        const receipt2 = await (
+                            await dimoStaking
+                                .connect(user1)
+                                ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
+                        ).wait()
+                        const eventArgs2 = (receipt2?.logs[3] as EventLog).args
+                        const stakingBeaconAddress2 = eventArgs2[2]
 
-                    expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(0)
-                    expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(
-                        C.stakingLevels[1].amount * 2n
-                    )
+                        const stakingBeaconAddressAfter = await dimoStaking.stakeIdToStake(1)
+                        expect(ethers.isAddress(stakingBeaconAddressAfter)).to.be.true
+                        expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
+                        expect(await dimoStaking.stakerToStake(user2.address)).to.equal(stakingBeaconAddressAfter)
+                    })
+                    it('Should transfer map the Stake ID to the Staking Beacon address of the new user', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                        const receipt1 = await (await dimoStaking.connect(user1).stake(1, 1)).wait()
+                        const eventArgs1 = (receipt1?.logs[3] as EventLog).args
+                        const stakingBeaconAddress1 = eventArgs1[2]
+
+                        const stakingBeaconAddressBefore = await dimoStaking.stakeIdToStake(1)
+                        expect(stakingBeaconAddressBefore).to.equal(stakingBeaconAddress1)
+
+                        const receipt2 = await (
+                            await dimoStaking
+                                .connect(user1)
+                                ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
+                        ).wait()
+                        const eventArgs2 = (receipt2?.logs[3] as EventLog).args
+                        const stakingBeaconAddress2 = eventArgs2[2]
+
+                        const stakingBeaconAddressAfter = await dimoStaking.stakeIdToStake(1)
+                        expect(stakingBeaconAddressAfter).to.equal(stakingBeaconAddress2)
+                    })
+                    it('Should transfer the amount of tokens to the new user', async () => {
+                        const { dimoStaking, mockDimoToken, user1, user2 } = await loadFixture(setup)
+
+                        await dimoStaking.connect(user1).stake(1, 1)
+
+                        const stakingBeaconAddress1 = await dimoStaking.stakerToStake(user1.address)
+
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(C.stakingLevels[1].amount)
+
+                        const receipt2 = await (
+                            await dimoStaking
+                                .connect(user1)
+                                ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
+                        ).wait()
+                        const eventArgs2 = (receipt2?.logs[3] as EventLog).args
+                        const stakingBeaconAddress2 = eventArgs2[2]
+
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress1)).to.equal(0)
+                        expect(await mockDimoToken.balanceOf(stakingBeaconAddress2)).to.equal(C.stakingLevels[1].amount)
+                    })
                 })
             })
         })
 
         context('Events', () => {
-            context('transferFrom', () => {
-                it('Should emit Withdraw event with correct params', async () => {
-                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
+            context('When recipient already has a Staking Beacon', () => {
+                context('transferFrom', () => {
+                    it('Should emit Withdraw event with correct params', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    await dimoStaking.connect(user1).stake(1, 1)
-                    await dimoStaking.connect(user2).stake(1, 2)
+                        await dimoStaking.connect(user1).stake(1, 1)
+                        await dimoStaking.connect(user2).stake(1, 2)
 
-                    await expect(dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1))
-                        .to.emit(dimoStaking, 'Withdrawn')
-                        .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                        await expect(dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1))
+                            .to.emit(dimoStaking, 'Withdrawn')
+                            .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                    })
+                    it('Should emit Staked event with correct params', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                        await dimoStaking.connect(user1).stake(1, 1)
+                        await dimoStaking.connect(user2).stake(1, 2)
+
+                        const lockEndTime = (await dimoStaking.stakeIdToStakingData(1)).lockEndTime
+
+                        const receipt = await (
+                            await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
+                        ).wait()
+                        const event = receipt?.logs[3] as EventLog
+                        const args = event.args
+
+                        expect(event.fragment.name).to.equal('Staked')
+                        expect(args[0]).to.equal(user2.address) // user
+                        expect(args[1]).to.equal(1) // stakeId
+                        expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
+                        expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
+                        expect(args[3]).to.equal(1) // level
+                        expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
+                        expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                    })
                 })
-                it('Should emit Staked event with correct params', async () => {
-                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    await dimoStaking.connect(user1).stake(1, 1)
-                    await dimoStaking.connect(user2).stake(1, 2)
+                context('safeTransferFrom', () => {
+                    it('Should emit Withdraw event with correct params', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    const lockEndTime = (await dimoStaking.stakeIdToStakingData(1)).lockEndTime
+                        await dimoStaking.connect(user1).stake(1, 1)
+                        await dimoStaking.connect(user2).stake(1, 2)
 
-                    const receipt = await (
-                        await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
-                    ).wait()
-                    const event = receipt?.logs[3] as EventLog
-                    const args = event.args
+                        await expect(
+                            dimoStaking
+                                .connect(user1)
+                                ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
+                        )
+                            .to.emit(dimoStaking, 'Withdrawn')
+                            .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                    })
+                    it('Should emit Staked event with correct params', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    expect(event.fragment.name).to.equal('Staked')
-                    expect(args[0]).to.equal(user2.address) // user
-                    expect(args[1]).to.equal(1) // stakeId
-                    expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
-                    expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
-                    expect(args[3]).to.equal(1) // level
-                    expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
-                    expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                        await dimoStaking.connect(user1).stake(1, 1)
+                        await dimoStaking.connect(user2).stake(1, 2)
+
+                        const lockEndTime = (await dimoStaking.stakeIdToStakingData(1)).lockEndTime
+
+                        const receipt = await (
+                            await dimoStaking
+                                .connect(user1)
+                                ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
+                        ).wait()
+                        const event = receipt?.logs[3] as EventLog
+                        const args = event.args
+
+                        expect(event.fragment.name).to.equal('Staked')
+                        expect(args[0]).to.equal(user2.address) // user
+                        expect(args[1]).to.equal(1) // stakeId
+                        expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
+                        expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
+                        expect(args[3]).to.equal(1) // level
+                        expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
+                        expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                    })
                 })
             })
 
-            context('safeTransferFrom', () => {
-                it('Should emit Withdraw event with correct params', async () => {
-                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
+            context('When recipient does not have a Staking Beacon', () => {
+                context('transferFrom', () => {
+                    it('Should emit Withdraw event with correct params', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    await dimoStaking.connect(user1).stake(1, 1)
-                    await dimoStaking.connect(user2).stake(1, 2)
+                        await dimoStaking.connect(user1).stake(1, 1)
 
-                    await expect(
-                        dimoStaking
-                            .connect(user1)
-                            ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
-                    )
-                        .to.emit(dimoStaking, 'Withdrawn')
-                        .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                        await expect(dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1))
+                            .to.emit(dimoStaking, 'Withdrawn')
+                            .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                    })
+                    it('Should emit Staked event with correct params', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
+
+                        await dimoStaking.connect(user1).stake(1, 1)
+
+                        const lockEndTime = (await dimoStaking.stakeIdToStakingData(1)).lockEndTime
+
+                        const receipt = await (
+                            await dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1)
+                        ).wait()
+                        const event = receipt?.logs[3] as EventLog
+                        const args = event.args
+
+                        expect(event.fragment.name).to.equal('Staked')
+                        expect(args[0]).to.equal(user2.address) // user
+                        expect(args[1]).to.equal(1) // stakeId
+                        expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
+                        expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
+                        expect(args[3]).to.equal(1) // level
+                        expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
+                        expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                    })
                 })
-                it('Should emit Staked event with correct params', async () => {
-                    const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    await dimoStaking.connect(user1).stake(1, 1)
-                    await dimoStaking.connect(user2).stake(1, 2)
+                context('safeTransferFrom', () => {
+                    it('Should emit Withdraw event with correct params', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    const lockEndTime = (await dimoStaking.stakeIdToStakingData(1)).lockEndTime
+                        await dimoStaking.connect(user1).stake(1, 1)
 
-                    const receipt = await (
-                        await dimoStaking
-                            .connect(user1)
-                            ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
-                    ).wait()
-                    const event = receipt?.logs[3] as EventLog
-                    const args = event.args
+                        await expect(
+                            dimoStaking
+                                .connect(user1)
+                                ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
+                        )
+                            .to.emit(dimoStaking, 'Withdrawn')
+                            .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                    })
+                    it('Should emit Staked event with correct params', async () => {
+                        const { dimoStaking, user1, user2 } = await loadFixture(setup)
 
-                    expect(event.fragment.name).to.equal('Staked')
-                    expect(args[0]).to.equal(user2.address) // user
-                    expect(args[1]).to.equal(1) // stakeId
-                    expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
-                    expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
-                    expect(args[3]).to.equal(1) // level
-                    expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
-                    expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                        await dimoStaking.connect(user1).stake(1, 1)
+
+                        const lockEndTime = (await dimoStaking.stakeIdToStakingData(1)).lockEndTime
+
+                        const receipt = await (
+                            await dimoStaking
+                                .connect(user1)
+                                ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
+                        ).wait()
+                        const event = receipt?.logs[3] as EventLog
+                        const args = event.args
+
+                        expect(event.fragment.name).to.equal('Staked')
+                        expect(args[0]).to.equal(user2.address) // user
+                        expect(args[1]).to.equal(1) // stakeId
+                        expect(args[2]).to.not.equal(ethers.ZeroAddress) // stakingBeacon
+                        expect(ethers.isAddress(args[2])).to.be.true // stakingBeacon
+                        expect(args[3]).to.equal(1) // level
+                        expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
+                        expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                    })
                 })
             })
         })

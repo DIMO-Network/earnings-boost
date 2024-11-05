@@ -431,7 +431,9 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         address stakingTo = $.stakerToStake[to];
 
         if (stakingTo == address(0)) {
-            revert NoActiveStaking(to);
+            // Creates a new StakingBeacon
+            stakingTo = address(new StakingBeacon($.dimoToken, msg.sender));
+            $.stakerToStake[to] = stakingTo;
         }
 
         StakingData memory stakingData = $.stakeIdToStakingData[tokenId];
