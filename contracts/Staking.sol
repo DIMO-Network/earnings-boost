@@ -56,7 +56,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     error TokensStillLocked(uint256 stakeId);
     error Unauthorized(address addr, uint256 vehicleId);
     error InvalidVehicleId(uint256 vehicleId);
-    error NoActiveStaking(address user);
+    error NoActiveStaking();
     error VehicleAlreadyAttached(uint256 vehicleId);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -223,7 +223,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
         StakingData memory stakingData = $.stakeIdToStakingData[stakeId];
 
-        if (block.timestamp < stakingData.lockEndTime) {
+        if (block.timestamp <= stakingData.lockEndTime) {
             revert TokensStillLocked(stakeId);
         }
         if (stakingData.vehicleId != 0) {
@@ -255,7 +255,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             if (msg.sender != ownerOf(stakeId)) {
                 revert InvalidStakeId(stakeId);
             }
-            if (block.timestamp < stakingData.lockEndTime) {
+            if (block.timestamp <= stakingData.lockEndTime) {
                 revert TokensStillLocked(stakeId);
             }
             if (stakingData.vehicleId != 0) {
@@ -336,7 +336,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         address stakingBeaconAddress = $.stakeIdToStake[stakeId];
 
         if (stakingBeaconAddress == address(0)) {
-            revert NoActiveStaking(msg.sender);
+            revert NoActiveStaking();
         }
 
         try IVehicleId($.vehicleIdProxy).ownerOf(vehicleId) returns (address vehicleIdOwner) {
@@ -360,7 +360,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         IStakingBeacon staking = IStakingBeacon(_getDimoStakingStorage().stakerToStake[msg.sender]);
 
         if (address(staking) == address(0)) {
-            revert NoActiveStaking(msg.sender);
+            revert NoActiveStaking();
         }
 
         staking.delegate(delegatee);
@@ -404,21 +404,21 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     // TODO Documentation
     function getBaselinePoints(uint256 vehicleId) external view returns (uint256) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
-        uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
 
         if (!IVehicleId($.vehicleIdProxy).exists(vehicleId)) {
             return 0;
         }
 
+        uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
         if (stakeId == 0) {
             return 0;
         }
 
         StakingData memory stakingData = $.stakeIdToStakingData[stakeId];
 
-        // TODO stakingData.amount == 0 and stakingData.vehicleId == 0 might be redundant
-        if (stakingData.amount == 0 || stakingData.lockEndTime < block.timestamp || stakingData.vehicleId == 0)
+        if ($.stakeIdToStakingData[stakeId].lockEndTime < block.timestamp) {
             return 0;
+        }
 
         return $.stakingLevels[stakingData.level].points;
     }
@@ -457,21 +457,12 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
 
     // TODO Documentation
+    // It assumes the vehicle is attached because all locations that call this function have this requirement
     function isVehicleAttachedAndActive(uint256 vehicleId) private view returns (bool) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
-        uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
+        uint256 stakeId = _getDimoStakingStorage().vehicleIdToStakeId[vehicleId];
 
-        if (stakeId == 0) {
-            return false;
-        }
-
-        StakingData memory stakingData = $.stakeIdToStakingData[stakeId];
-
-        // TODO stakingData.amount == 0 and stakingData.vehicleId == 0 might be redundant
-        if (stakingData.amount == 0 || stakingData.lockEndTime < block.timestamp || stakingData.vehicleId == 0)
-            return false;
-
-        return true;
+        return block.timestamp <= $.stakeIdToStakingData[stakeId].lockEndTime;
     }
 
     /**

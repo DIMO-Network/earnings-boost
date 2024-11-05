@@ -1068,9 +1068,10 @@ describe('Staking', function () {
 
                 await dimoStaking.connect(user1).stake(1, 0)
 
-                await expect(dimoStaking.connect(user1).detachVehicle(1))
-                    .to.be.revertedWithCustomError(dimoStaking, 'NoActiveStaking')
-                    .withArgs(user1.address)
+                await expect(dimoStaking.connect(user1).detachVehicle(1)).to.be.revertedWithCustomError(
+                    dimoStaking,
+                    'NoActiveStaking'
+                )
             })
             it('Should revert if caller is not the staker or vehicle ID owner', async () => {
                 const { dimoStaking, user1, user2 } = await loadFixture(setup)
@@ -1168,9 +1169,10 @@ describe('Staking', function () {
             it('Should revert if caller does not have a Staking Beacon', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
 
-                await expect(dimoStaking.connect(user1).delegate(user1.address))
-                    .to.be.revertedWithCustomError(dimoStaking, 'NoActiveStaking')
-                    .withArgs(user1.address)
+                await expect(dimoStaking.connect(user1).delegate(user1.address)).to.be.revertedWithCustomError(
+                    dimoStaking,
+                    'NoActiveStaking'
+                )
             })
         })
 
