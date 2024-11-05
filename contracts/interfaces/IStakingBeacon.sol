@@ -3,6 +3,10 @@ pragma solidity ^0.8.27;
 
 import '../Types.sol';
 
+/**
+ * @title IStakingBeacon
+ * @notice This interface defines the functions for the IStakingBeacon contract
+ */
 interface IStakingBeacon {
     function withdraw(uint256 amount) external;
 

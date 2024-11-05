@@ -13,8 +13,13 @@ import './Types.sol';
 import './interfaces/IStakingBeacon.sol';
 import './interfaces/IVehicleId.sol';
 
-// TODO Documentation
-// Mention that burned vehicles are not handled. Functions always check token existence
+/**
+ * @title DIMOStaking
+ * @notice This contract allows users to stake their $DIMO tokens to earn rewards boosts
+ * Users can stake different quantities of $DIMO for different durations to receive a corresponding boost level
+ * The contract utilizes a StakingBeacon contract to manage the staked tokens and delegate voting power
+ * @dev Burning Vehicle IDs is not directly handled. The functions always check token existence.
+ */
 contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     struct DimoStakingStorage {
         address dimoToken;
@@ -64,7 +69,11 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         _disableInitializers();
     }
 
-    // TODO Documentation
+    /**
+     * @notice Initializes the DIMOStaking contract
+     * @param dimoToken_ Address of the DIMO token contract
+     * @param vehicleIdProxy_ Address of the VehicleId proxy contract
+     */
     function initialize(address dimoToken_, address vehicleIdProxy_) external initializer {
         __AccessControl_init();
         __ERC721_init('DIMO Staking', 'DSTK');
@@ -84,8 +93,13 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         $.stakingLevels[2] = StakingLevel(4000 ether, 730 days, 3000);
     }
 
-    // TODO Documentation
-    // If staker has no StakingBeacon, create one and a stake ID. Otherwise, just a new stake ID
+    /**
+     * @notice Stakes DIMO tokens for a specific level and optionally attaches a Vehicle ID
+     * @dev If the staker has no existing StakingBeacon, a new one is created
+     * A new Stake ID is minted regardless
+     * @param level The staking level (0-2)
+     * @param vehicleId The ID of the Vehicle to attach (can be 0 for no attachment)
+     */
     function stake(uint8 level, uint256 vehicleId) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
@@ -152,7 +166,12 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         }
     }
 
-    // TODO Documentation
+    /**
+     * @notice Upgrades an existing stake to a higher level and optionally attaches a Vehicle ID
+     * @param stakeId The ID of the Stake to upgrade
+     * @param level The new staking level (1-2)
+     * @param vehicleId The ID of the Vehicle to attach (can be 0 for no attachment)
+     */
     function upgradeStake(uint256 stakeId, uint8 level, uint256 vehicleId) external {
         // It also reverts if stakeId does not exist
         if (msg.sender != ownerOf(stakeId)) {
@@ -212,7 +231,11 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         }
     }
 
-    // TODO Documentation
+    /**
+     * @notice Withdraws staked DIMO tokens for a specific Stake ID
+     * @dev Reverts if the Stake ID does not exist or if the tokens are still locked
+     * @param stakeId The ID of the Stake to withdraw
+     */
     function withdraw(uint256 stakeId) external {
         // It also reverts if stakeId does not exist
         if (msg.sender != ownerOf(stakeId)) {
@@ -239,7 +262,11 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         emit Withdrawn(msg.sender, stakeId, amountWithdrawn);
     }
 
-    // TODO Documentation
+    /**
+     * @notice Withdraws staked DIMO tokens for multiple Stake IDs
+     * @dev Reverts if any Stake ID does not exist or if any tokens are still locked
+     * @param stakeIds The IDs of the Stakes to withdraw
+     */
     function withdraw(uint256[] calldata stakeIds) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
         IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
@@ -272,7 +299,11 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         }
     }
 
-    // TODO Documentation
+    /**
+     * @notice Extends the lock period of an existing Stake
+     * @dev Reverts if the Stake ID does not exist
+     * @param stakeId The ID of the Stake to extend
+     */
     function extendStaking(uint256 stakeId) external {
         // It also reverts if stakeId does not exist
         if (msg.sender != ownerOf(stakeId)) {
@@ -289,7 +320,14 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         emit StakingExtended(msg.sender, stakeId, newLockEndTime);
     }
 
-    // TODO Documentation
+    /**
+     * @notice Attaches a vehicle ID to an existing Stake
+     * @dev Reverts if the Stake ID does not exist,
+     * the Vehicle ID does not exist,
+     * or the Vehicle ID is already attached to an active Stake ID
+     * @param stakeId The ID of the Stake to attach the Vehicle to
+     * @param vehicleId The ID of the Vehicle to attach
+     */
     function attachVehicle(uint256 stakeId, uint256 vehicleId) external {
         // It also reverts if stakeId does not exist
         if (msg.sender != ownerOf(stakeId)) {
@@ -329,7 +367,12 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         emit VehicleAttached(msg.sender, stakeId, vehicleId);
     }
 
-    // TODO Documentation
+    /**
+     * @notice Detaches a vehicle ID from a Stake
+     * @dev Reverts if the Stake ID has no Vehicle ID attached
+     * or if the caller is not the staker or Vehicle ID owner
+     * @param vehicleId The ID of the Vehicle to detach
+     */
     function detachVehicle(uint256 vehicleId) external {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
         uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
@@ -355,7 +398,11 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         emit VehicleDetached(msg.sender, stakeId, vehicleId);
     }
 
-    // TODO Documentation
+    /**
+     * @notice Delegates voting power of staked tokens to a delegatee
+     * @dev Reverts if the caller does not have an active Stake
+     * @param delegatee The address to delegate voting power to
+     */
     function delegate(address delegatee) external {
         IStakingBeacon staking = IStakingBeacon(_getDimoStakingStorage().stakerToStake[msg.sender]);
 
@@ -366,42 +413,73 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         staking.delegate(delegatee);
     }
 
-    // TODO Documentation
+    /**
+     * @notice Returns the address of the DIMO token contract
+     * @return The address of the DIMO token contract
+     */
     function dimoToken() external view returns (address) {
         return _getDimoStakingStorage().dimoToken;
     }
 
-    // TODO Documentation
+    /**
+     * @notice Returns the address of the VehicleId proxy contract
+     * @return The address of the VehicleId proxy contract
+     */
     function vehicleIdProxy() external view returns (address) {
         return _getDimoStakingStorage().vehicleIdProxy;
     }
 
-    // TODO Documentation
+    /**
+     * @notice Returns the StakingLevel struct for a specific level
+     * @param level The staking level (0-2)
+     * @return The StakingLevel struct for the specified level
+     */
     function stakingLevels(uint8 level) external view returns (StakingLevel memory) {
         return _getDimoStakingStorage().stakingLevels[level];
     }
 
-    // TODO Documentation
+    /**
+     * @notice Returns the StakingData struct for a specific Stake ID
+     * @param stakeId The ID of the Stake
+     * @return The StakingData struct for the specified Stake ID
+     */
     function stakeIdToStakingData(uint256 stakeId) external view returns (StakingData memory) {
         return _getDimoStakingStorage().stakeIdToStakingData[stakeId];
     }
 
-    // TODO Documentation
+    /**
+     * @notice Returns the address of the StakingBeacon contract for a specific Stake ID
+     * @param stakeId The ID of the Stake
+     * @return The address of the StakingBeacon contract for the specified Stake ID
+     */
     function stakeIdToStake(uint256 stakeId) external view returns (address) {
         return _getDimoStakingStorage().stakeIdToStake[stakeId];
     }
 
-    // TODO Documentation
+    /**
+     * @notice Returns the address of the StakingBeacon contract for a specific user
+     * @param user The address of the user
+     * @return The address of the StakingBeacon contract for the specified user
+     */
     function stakerToStake(address user) external view returns (address) {
         return _getDimoStakingStorage().stakerToStake[user];
     }
 
-    // TODO Documentation
+    /**
+     * @notice Returns the stake ID associated with a specific Vehicle ID
+     * @param vehicleId The ID of the Vehicle
+     * @return The stake ID associated with the specified Vehicle ID
+     */
     function vehicleIdToStakeId(uint256 vehicleId) external view returns (uint256) {
         return _getDimoStakingStorage().vehicleIdToStakeId[vehicleId];
     }
 
-    // TODO Documentation
+    /**
+     * @notice Returns the baseline points for a Vehicle based on its active stake
+     * @dev Returns 0 if the Vehicle is not attached to any stake, has been burned, or the stake has expired
+     * @param vehicleId The ID of the Vehicle
+     * @return The baseline points for the specified Vehicle ID
+     */
     function getBaselinePoints(uint256 vehicleId) external view returns (uint256) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 
@@ -423,7 +501,13 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         return $.stakingLevels[stakingData.level].points;
     }
 
-    // TODO Documentation
+    /**
+     * @notice Transfers a Stake ID to a new owner
+     * @dev Creates a new Staking Beacon if the recipient does not have one
+     * @param from The current owner of the Stake ID
+     * @param to The new owner of the Stake ID
+     * @param tokenId The ID of the Stake to transfer
+     */
     function transferFrom(address from, address to, uint256 tokenId) public override {
         super.transferFrom(from, to, tokenId);
 
@@ -446,18 +530,28 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         emit Staked(to, tokenId, stakingTo, stakingData.level, stakingData.amount, stakingData.lockEndTime);
     }
 
-    // TODO Documentation
+    /**
+     * @notice See {IERC165-supportsInterface}.
+     */
     function supportsInterface(
         bytes4 interfaceId
     ) public view override(ERC721Upgradeable, AccessControlUpgradeable) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
-    // TODO Documentation
+    /**
+     * @notice Authorizes an upgrade of the contract
+     * @dev Only accounts with the UPGRADER_ROLE can upgrade the contract
+     * @param newImplementation The address of the new implementation contract
+     */
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
 
-    // TODO Documentation
-    // It assumes the vehicle is attached because all locations that call this function have this requirement
+    /**
+     * @notice Checks if a Vehicle is attached to an active Stake
+     * @dev Assumes the Vehicle is attached as this function is only called in contexts where this is a requirement
+     * @param vehicleId The ID of the Vehicle
+     * @return True if the Vehicle is attached to an active Stake, false otherwise
+     */
     function isVehicleAttachedAndActive(uint256 vehicleId) private view returns (bool) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
         uint256 stakeId = _getDimoStakingStorage().vehicleIdToStakeId[vehicleId];
