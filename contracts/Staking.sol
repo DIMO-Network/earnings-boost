@@ -20,8 +20,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         address dimoToken;
         address vehicleIdProxy;
         uint256 currentStakeId;
-        // TODO Maybe we should ignore the level, it does not mean much
         mapping(uint256 => StakingLevel) stakingLevels;
+        mapping(uint256 stakeId => StakingData) stakeIdToStakingData;
         mapping(uint256 stakeId => address stakerContract) stakeIdToStake;
         mapping(address staker => address stakerContract) stakerToStake;
         mapping(uint256 vehicleTokenId => uint256 stakeId) vehicleIdToStakeId;
@@ -52,6 +52,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     event StakingExtended(address indexed user, uint256 indexed stakeId, uint256 newLockEndTime);
 
     error InvalidStakingLevel(uint8 level);
+    error InvalidStakeId(uint256 stakeId);
     error TokensStillLocked(uint256 stakeId);
     error Unauthorized(address addr, uint256 vehicleId);
     error InvalidVehicleId(uint256 vehicleId);
@@ -104,17 +105,13 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         address stakingBeaconAddress = $.stakerToStake[msg.sender];
         if (stakingBeaconAddress == address(0)) {
             // Creates a new StakingBeacon
-            stakingBeaconAddress = address(
-                new StakingBeacon($.dimoToken, $.vehicleIdProxy, msg.sender, currentStakeId, stakingData)
-            );
+            stakingBeaconAddress = address(new StakingBeacon($.dimoToken, msg.sender));
 
             $.stakerToStake[msg.sender] = stakingBeaconAddress;
-        } else {
-            // Creates a stakeId in an existing StakingBeacon
-            IStakingBeacon(stakingBeaconAddress).createStakingData(currentStakeId, stakingData);
         }
 
         $.stakeIdToStake[currentStakeId] = stakingBeaconAddress;
+        $.stakeIdToStakingData[currentStakeId] = stakingData;
 
         require(
             IERC20($.dimoToken).transferFrom(msg.sender, stakingBeaconAddress, stakingLevel.amount),
@@ -144,11 +141,10 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                     revert VehicleAlreadyAttached(vehicleId);
                 }
 
-                IStakingBeacon expiredStaking = IStakingBeacon($.stakeIdToStake[attachedStakeId]);
                 // Expired Stake will have Vehicle detached
-                expiredStaking.detachVehicle(attachedStakeId);
+                delete $.stakeIdToStakingData[attachedStakeId].vehicleId;
 
-                emit VehicleDetached(expiredStaking.staker(), attachedStakeId, vehicleId);
+                emit VehicleDetached(ownerOf(attachedStakeId), attachedStakeId, vehicleId);
             }
 
             $.vehicleIdToStakeId[vehicleId] = currentStakeId;
@@ -158,14 +154,14 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
     // TODO Documentation
     function upgradeStake(uint256 stakeId, uint8 level, uint256 vehicleId) external {
-        DimoStakingStorage storage $ = _getDimoStakingStorage();
-        IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
-
-        if (address(staking) == address(0)) {
-            revert NoActiveStaking(msg.sender);
+        // It also reverts if stakeId does not exist
+        if (msg.sender != ownerOf(stakeId)) {
+            revert InvalidStakeId(stakeId);
         }
 
-        StakingData memory stakingData = staking.stakingData(stakeId);
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+        IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
+        StakingData memory stakingData = $.stakeIdToStakingData[stakeId];
 
         if (level > MAX_STAKING_LEVEL || stakingData.level >= level) {
             revert InvalidStakingLevel(level);
@@ -184,7 +180,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             vehicleId: vehicleId
         });
 
-        staking.upgradeStake(stakeId, newStakingData);
+        $.stakeIdToStakingData[stakeId] = newStakingData;
 
         emit Staked(msg.sender, stakeId, address(staking), level, newStakingData.amount, newStakingData.lockEndTime);
 
@@ -200,13 +196,12 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                         revert VehicleAlreadyAttached(vehicleId);
                     }
 
-                    IStakingBeacon expiredStaking = IStakingBeacon($.stakeIdToStake[attachedStakeId]);
                     // Current attached Vehicle ID will be replaced
                     delete $.vehicleIdToStakeId[currentAttachedVehicleId];
                     // Expired Stake will have Vehicle detached
-                    expiredStaking.detachVehicle(attachedStakeId);
+                    delete $.stakeIdToStakingData[attachedStakeId].vehicleId;
 
-                    emit VehicleDetached(expiredStaking.staker(), attachedStakeId, vehicleId);
+                    emit VehicleDetached(ownerOf(attachedStakeId), attachedStakeId, vehicleId);
                 }
 
                 $.vehicleIdToStakeId[vehicleId] = stakeId;
@@ -219,13 +214,14 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
     // TODO Documentation
     function withdraw(uint256 stakeId) external {
-        IStakingBeacon staking = IStakingBeacon(_getDimoStakingStorage().stakerToStake[msg.sender]);
-
-        if (address(staking) == address(0)) {
-            revert NoActiveStaking(msg.sender);
+        // It also reverts if stakeId does not exist
+        if (msg.sender != ownerOf(stakeId)) {
+            revert InvalidStakeId(stakeId);
         }
 
-        StakingData memory stakingData = staking.stakingData(stakeId);
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+        IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
+        StakingData memory stakingData = $.stakeIdToStakingData[stakeId];
 
         if (block.timestamp < stakingData.lockEndTime) {
             revert TokensStillLocked(stakeId);
@@ -234,26 +230,31 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             emit VehicleDetached(msg.sender, stakeId, stakingData.vehicleId);
         }
 
-        uint256 amountWithdrawn = staking.withdraw(stakeId);
+        uint256 amountWithdrawn = $.stakeIdToStakingData[stakeId].amount;
+
+        staking.withdraw(amountWithdrawn);
+
+        delete $.stakeIdToStakingData[stakeId];
 
         emit Withdrawn(msg.sender, stakeId, amountWithdrawn);
     }
 
     // TODO Documentation
     function withdraw(uint256[] calldata stakeIds) external {
-        IStakingBeacon staking = IStakingBeacon(_getDimoStakingStorage().stakerToStake[msg.sender]);
-
-        if (address(staking) == address(0)) {
-            revert NoActiveStaking(msg.sender);
-        }
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+        IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
 
         uint256 stakeId;
         uint256 amountWithdrawn;
         StakingData memory stakingData;
         for (uint256 i = 0; i < stakeIds.length; i++) {
             stakeId = stakeIds[i];
-            stakingData = staking.stakingData(stakeId);
+            stakingData = $.stakeIdToStakingData[stakeId];
 
+            // It also reverts if stakeId does not exist
+            if (msg.sender != ownerOf(stakeId)) {
+                revert InvalidStakeId(stakeId);
+            }
             if (block.timestamp < stakingData.lockEndTime) {
                 revert TokensStillLocked(stakeId);
             }
@@ -261,7 +262,11 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                 emit VehicleDetached(msg.sender, stakeId, stakingData.vehicleId);
             }
 
-            amountWithdrawn = staking.withdraw(stakeId);
+            amountWithdrawn = $.stakeIdToStakingData[stakeId].amount;
+
+            staking.withdraw(amountWithdrawn);
+
+            delete $.stakeIdToStakingData[stakeId];
 
             emit Withdrawn(msg.sender, stakeId, amountWithdrawn);
         }
@@ -269,31 +274,29 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
 
     // TODO Documentation
     function extendStaking(uint256 stakeId) external {
-        DimoStakingStorage storage $ = _getDimoStakingStorage();
-        IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
-
-        if (address(staking) == address(0)) {
-            revert NoActiveStaking(msg.sender);
+        // It also reverts if stakeId does not exist
+        if (msg.sender != ownerOf(stakeId)) {
+            revert InvalidStakeId(stakeId);
         }
 
-        StakingData memory stakingData = staking.stakingData(stakeId);
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
+        StakingData memory stakingData = $.stakeIdToStakingData[stakeId];
 
         uint256 newLockEndTime = block.timestamp + $.stakingLevels[stakingData.level].lockPeriod;
 
-        staking.extendStaking(stakeId, newLockEndTime);
+        $.stakeIdToStakingData[stakeId].lockEndTime = newLockEndTime;
 
         emit StakingExtended(msg.sender, stakeId, newLockEndTime);
     }
 
     // TODO Documentation
     function attachVehicle(uint256 stakeId, uint256 vehicleId) external {
-        // TODO handle vehicle ID transfer
-        DimoStakingStorage storage $ = _getDimoStakingStorage();
-        IStakingBeacon staking = IStakingBeacon($.stakerToStake[msg.sender]);
-
-        if (address(staking) == address(0)) {
-            revert NoActiveStaking(msg.sender);
+        // It also reverts if stakeId does not exist
+        if (msg.sender != ownerOf(stakeId)) {
+            revert InvalidStakeId(stakeId);
         }
+
+        DimoStakingStorage storage $ = _getDimoStakingStorage();
 
         if (!IVehicleId($.vehicleIdProxy).exists(vehicleId)) {
             revert InvalidVehicleId(vehicleId);
@@ -308,21 +311,20 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                 revert VehicleAlreadyAttached(vehicleId);
             }
 
-            IStakingBeacon expiredStaking = IStakingBeacon($.stakeIdToStake[attachedStakeId]);
             // Expired Stake will have Vehicle detached
-            expiredStaking.detachVehicle(attachedStakeId);
+            delete $.stakeIdToStakingData[attachedStakeId].vehicleId;
 
-            emit VehicleDetached(expiredStaking.staker(), attachedStakeId, vehicleId);
+            emit VehicleDetached(ownerOf(attachedStakeId), attachedStakeId, vehicleId);
         }
 
-        uint256 currentAttachedVehicleId = staking.stakingData(stakeId).vehicleId;
+        uint256 currentAttachedVehicleId = $.stakeIdToStakingData[stakeId].vehicleId;
         if (currentAttachedVehicleId != 0) {
             delete $.vehicleIdToStakeId[currentAttachedVehicleId];
             emit VehicleDetached(msg.sender, stakeId, currentAttachedVehicleId);
         }
 
         $.vehicleIdToStakeId[vehicleId] = stakeId;
-        staking.attachVehicle(stakeId, vehicleId);
+        $.stakeIdToStakingData[stakeId].vehicleId = vehicleId;
 
         emit VehicleAttached(msg.sender, stakeId, vehicleId);
     }
@@ -348,7 +350,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         }
 
         delete $.vehicleIdToStakeId[vehicleId];
-        IStakingBeacon(stakingBeaconAddress).detachVehicle(stakeId);
+        delete $.stakeIdToStakingData[stakeId].vehicleId;
 
         emit VehicleDetached(msg.sender, stakeId, vehicleId);
     }
@@ -380,6 +382,11 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
     }
 
     // TODO Documentation
+    function stakeIdToStakingData(uint256 stakeId) external view returns (StakingData memory) {
+        return _getDimoStakingStorage().stakeIdToStakingData[stakeId];
+    }
+
+    // TODO Documentation
     function stakeIdToStake(uint256 stakeId) external view returns (address) {
         return _getDimoStakingStorage().stakeIdToStake[stakeId];
     }
@@ -407,8 +414,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             return 0;
         }
 
-        IStakingBeacon staking = IStakingBeacon($.stakeIdToStake[stakeId]);
-        StakingData memory stakingData = staking.stakingData(stakeId);
+        StakingData memory stakingData = $.stakeIdToStakingData[stakeId];
 
         // TODO stakingData.amount == 0 and stakingData.vehicleId == 0 might be redundant
         if (stakingData.amount == 0 || stakingData.lockEndTime < block.timestamp || stakingData.vehicleId == 0)
@@ -428,15 +434,14 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             revert NoActiveStaking(to);
         }
 
-        IStakingBeacon stakingFrom = IStakingBeacon($.stakeIdToStake[tokenId]);
-        StakingData memory stakingDataFrom = stakingFrom.stakingData(tokenId);
+        StakingData memory stakingData = $.stakeIdToStakingData[tokenId];
 
-        IStakingBeacon(stakingTo).createStakingData(tokenId, stakingDataFrom);
-        stakingFrom.transferStake(tokenId, stakingTo);
+        IStakingBeacon($.stakeIdToStake[tokenId]).transferStake(stakingData.amount, stakingTo);
+        $.stakeIdToStake[tokenId] = stakingTo;
 
-        emit Withdrawn(from, tokenId, stakingDataFrom.amount);
+        emit Withdrawn(from, tokenId, stakingData.amount);
 
-        emit Staked(to, tokenId, stakingTo, stakingDataFrom.level, stakingDataFrom.amount, stakingDataFrom.lockEndTime);
+        emit Staked(to, tokenId, stakingTo, stakingData.level, stakingData.amount, stakingData.lockEndTime);
     }
 
     // TODO Documentation
@@ -458,8 +463,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             return false;
         }
 
-        IStakingBeacon staking = IStakingBeacon($.stakeIdToStake[stakeId]);
-        StakingData memory stakingData = staking.stakingData(stakeId);
+        StakingData memory stakingData = $.stakeIdToStakingData[stakeId];
 
         // TODO stakingData.amount == 0 and stakingData.vehicleId == 0 might be redundant
         if (stakingData.amount == 0 || stakingData.lockEndTime < block.timestamp || stakingData.vehicleId == 0)

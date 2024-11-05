@@ -35,72 +35,12 @@ describe('StakingBeacon', function () {
         return { user1, user2, user3, dimoStaking, stakingBeacon1, mockDimoToken }
     }
 
-    describe('createStakingData', () => {
-        context('Errors', () => {
-            it('Should revert if caller is not the DIMO Staking contract', async () => {
-                const { stakingBeacon1, user1 } = await loadFixture(setup)
-
-                await expect(stakingBeacon1.connect(user1).createStakingData(1, C.mockSakingData))
-                    .to.be.revertedWithCustomError(stakingBeacon1, 'Unauthorized')
-                    .withArgs(user1.address)
-            })
-        })
-    })
-
-    describe('upgradeStake', () => {
-        context('Errors', () => {
-            it('Should revert if caller is not the DIMO Staking contract', async () => {
-                const { stakingBeacon1, user1 } = await loadFixture(setup)
-
-                await expect(stakingBeacon1.connect(user1).upgradeStake(1, C.mockSakingData))
-                    .to.be.revertedWithCustomError(stakingBeacon1, 'Unauthorized')
-                    .withArgs(user1.address)
-            })
-        })
-    })
-
     describe('withdraw', () => {
         context('Errors', () => {
             it('Should revert if caller is not the DIMO Staking contract', async () => {
                 const { stakingBeacon1, user1 } = await loadFixture(setup)
 
                 await expect(stakingBeacon1.connect(user1).withdraw(1))
-                    .to.be.revertedWithCustomError(stakingBeacon1, 'Unauthorized')
-                    .withArgs(user1.address)
-            })
-        })
-    })
-
-    describe('extendStaking', () => {
-        context('Errors', () => {
-            it('Should revert if caller is not the DIMO Staking contract', async () => {
-                const { stakingBeacon1, user1 } = await loadFixture(setup)
-
-                await expect(stakingBeacon1.connect(user1).extendStaking(1, C.stakingLevels[1].lockPeriod + 99n))
-                    .to.be.revertedWithCustomError(stakingBeacon1, 'Unauthorized')
-                    .withArgs(user1.address)
-            })
-        })
-    })
-
-    describe('attachVehicle', () => {
-        context('Errors', () => {
-            it('Should revert if caller is not the DIMO Staking contract', async () => {
-                const { stakingBeacon1, user1 } = await loadFixture(setup)
-
-                await expect(stakingBeacon1.connect(user1).attachVehicle(1, 1))
-                    .to.be.revertedWithCustomError(stakingBeacon1, 'Unauthorized')
-                    .withArgs(user1.address)
-            })
-        })
-    })
-
-    describe('detachVehicle', () => {
-        context('Errors', () => {
-            it('Should revert if caller is not the DIMO Staking contract', async () => {
-                const { stakingBeacon1, user1 } = await loadFixture(setup)
-
-                await expect(stakingBeacon1.connect(user1).detachVehicle(1))
                     .to.be.revertedWithCustomError(stakingBeacon1, 'Unauthorized')
                     .withArgs(user1.address)
             })
