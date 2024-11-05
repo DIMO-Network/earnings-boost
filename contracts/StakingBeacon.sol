@@ -6,17 +6,17 @@ import '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import './Types.sol';
 import './interfaces/IERC20Votes.sol';
 
+/**
+ * @title StakingBeacon
+ * @notice This contract acts as a beacon for staked DIMO tokens, managing withdrawals, stake transfers, and voting delegation
+ * Each staker has a corresponding StakingBeacon contract that holds their staked tokens
+ */
 contract StakingBeacon {
-    address public dimoStaking;
-    address public dimoToken;
-    address public vehicleIdProxy;
+    address public immutable dimoStaking;
+    address public immutable dimoToken;
     address public immutable staker;
 
-    mapping(uint256 stakeId => StakingData) public stakingData;
-
     error Unauthorized(address addr);
-    error InvalidStakeId(uint256 stakeId);
-    error NoVehicleAttached(uint256 stakeId);
 
     modifier onlyDimoStaking() {
         if (msg.sender != dimoStaking) {
@@ -25,95 +25,41 @@ contract StakingBeacon {
         _;
     }
 
-    // TODO Documentation
-    constructor(
-        address dimoToken_,
-        address vehicleIdProxy_,
-        address staker_,
-        uint256 stakeId_,
-        StakingData memory stakingData_
-    ) {
+    /**
+     * @notice Constructs a new StakingBeacon contract
+     * @param dimoToken_ The address of the DIMO token contract
+     * @param staker_ The address of the staker
+     */
+    constructor(address dimoToken_, address staker_) {
         dimoStaking = msg.sender;
         dimoToken = dimoToken_;
-        vehicleIdProxy = vehicleIdProxy_;
         staker = staker_;
-
-        stakingData[stakeId_] = stakingData_;
     }
 
-    // TODO Documentation
-    function createStakingData(uint256 stakeId, StakingData calldata stakingData_) external onlyDimoStaking {
-        if (stakingData[stakeId].amount != 0) {
-            revert InvalidStakeId(stakeId);
-        }
-
-        stakingData[stakeId] = stakingData_;
+    /**
+     * @notice Withdraws staked tokens to the staker
+     * @dev Only callable by the DIMO Staking contract
+     * @param amount The amount of tokens to withdraw
+     */
+    function withdraw(uint256 amount) external onlyDimoStaking {
+        require(IERC20(dimoToken).transfer(staker, amount), 'Transfer failed');
     }
 
-    // TODO Documentation
-    function upgradeStake(uint256 stakeId, StakingData calldata stakingData_) external onlyDimoStaking {
-        if (stakingData[stakeId].amount == 0) {
-            revert InvalidStakeId(stakeId);
-        }
-
-        stakingData[stakeId] = stakingData_;
+    /**
+     * @notice Transfers staked tokens to a new StakingBeacon contract
+     * @dev Only callable by the DIMO Staking contract
+     * @param amount The amount of tokens to transfer
+     * @param to The address of the recipient StakingBeacon contract
+     */
+    function transferStake(uint256 amount, address to) external onlyDimoStaking {
+        require(IERC20(dimoToken).transfer(to, amount), 'Transfer failed');
     }
 
-    // TODO Documentation
-    function withdraw(uint256 stakeId) external onlyDimoStaking returns (uint256 amountWithdrawn) {
-        StakingData memory stakingData_ = stakingData[stakeId];
-
-        if (stakingData_.amount == 0) {
-            revert InvalidStakeId(stakeId);
-        }
-
-        amountWithdrawn = stakingData_.amount;
-
-        require(IERC20(dimoToken).transfer(staker, amountWithdrawn), 'Transfer failed');
-
-        delete stakingData[stakeId];
-    }
-
-    // TODO Documentation
-    function extendStaking(uint256 stakeId, uint256 newLockEndTime) external onlyDimoStaking {
-        StakingData storage stakingData_ = stakingData[stakeId];
-
-        if (stakingData_.amount == 0) {
-            revert InvalidStakeId(stakeId);
-        }
-
-        stakingData_.lockEndTime = newLockEndTime;
-    }
-
-    // TODO Documentation
-    function attachVehicle(uint256 stakeId, uint256 vehicleId) external onlyDimoStaking {
-        StakingData storage stakingData_ = stakingData[stakeId];
-
-        if (stakingData_.amount == 0) {
-            revert InvalidStakeId(stakeId);
-        }
-
-        stakingData_.vehicleId = vehicleId;
-    }
-
-    // TODO Documentation
-    function detachVehicle(uint256 stakeId) external onlyDimoStaking {
-        uint256 vehicleId = stakingData[stakeId].vehicleId;
-
-        if (vehicleId == 0) {
-            revert NoVehicleAttached(stakeId);
-        }
-
-        delete stakingData[stakeId].vehicleId;
-    }
-
-    // TODO Documentation find a better name
-    function transferStake(uint256 stakeId, address to) external onlyDimoStaking {
-        require(IERC20(dimoToken).transfer(to, stakingData[stakeId].amount), 'Transfer failed');
-        delete stakingData[stakeId];
-    }
-
-    // TODO Documentation
+    /**
+     * @notice Delegates voting power of staked tokens to a delegatee
+     * @dev Callable by either the DIMO Staking contract or the staker
+     * @param delegatee The address to delegate voting power to
+     */
     function delegate(address delegatee) external {
         if (msg.sender != dimoStaking && msg.sender != staker) {
             revert Unauthorized(msg.sender);
