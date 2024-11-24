@@ -26,6 +26,7 @@
     "@openzeppelin/contracts-upgradeable": "^5.0.2",
     "dotenv": "^16.4.5",
     "hardhat": "^2.22.11",
+    "hardhat-abi-exporter": "^2.10.1",
     "openzeppelin-contracts-4.8": "npm:@openzeppelin/contracts@^4.8.0"
   },
   "devDependencies": {

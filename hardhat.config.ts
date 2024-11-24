@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 
 import { HardhatUserConfig } from 'hardhat/config'
 import '@nomicfoundation/hardhat-toolbox'
+import 'hardhat-abi-exporter'
 
 dotenv.config()
 
@@ -47,6 +48,12 @@ const config: HardhatUserConfig = {
                 },
             },
         ],
+    },
+    abiExporter: {
+        path: './abis',
+        runOnCompile: true,
+        only: [':DIMOStaking$', ':StakingBeacon$'],
+        format: 'json',
     },
 }
 
