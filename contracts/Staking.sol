@@ -553,7 +553,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
      */
     function isVehicleAttachedAndActive(uint256 vehicleId) private view returns (bool) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
-        uint256 stakeId = _getDimoStakingStorage().vehicleIdToStakeId[vehicleId];
+        uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
 
         return block.timestamp <= $.stakeIdToStakingData[stakeId].lockEndTime;
     }
