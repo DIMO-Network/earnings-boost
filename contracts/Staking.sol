@@ -5,7 +5,7 @@ import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
-import '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol';
 
 import './StakingBeacon.sol';
@@ -20,7 +20,7 @@ import './interfaces/IVehicleId.sol';
  * The contract utilizes a StakingBeacon contract to manage the staked tokens and delegate voting power
  * @dev Burning Vehicle IDs is not directly handled. The functions always check token existence.
  */
-contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAdminRulesUpgradeable, UUPSUpgradeable {
     struct DimoStakingStorage {
         address dimoToken;
         address vehicleIdProxy;
@@ -75,11 +75,10 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
      * @param vehicleIdProxy_ Address of the VehicleId proxy contract
      */
     function initialize(address dimoToken_, address vehicleIdProxy_) external initializer {
-        __AccessControl_init();
+        __AccessControlDefaultAdminRules_init(3 days, msg.sender);
         __ERC721_init('DIMO Staking', 'DSTK');
         __UUPSUpgradeable_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(UPGRADER_ROLE, msg.sender);
 
         DimoStakingStorage storage $ = _getDimoStakingStorage();
@@ -535,7 +534,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
      */
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(ERC721Upgradeable, AccessControlUpgradeable) returns (bool) {
+    ) public view override(ERC721Upgradeable, AccessControlDefaultAdminRulesUpgradeable) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
