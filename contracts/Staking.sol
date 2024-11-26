@@ -249,6 +249,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
             revert TokensStillLocked(stakeId);
         }
         if (stakingData.vehicleId != 0) {
+            delete $.vehicleIdToStakeId[stakingData.vehicleId];
             emit VehicleDetached(msg.sender, stakeId, stakingData.vehicleId);
         }
 
@@ -285,6 +286,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
                 revert TokensStillLocked(stakeId);
             }
             if (stakingData.vehicleId != 0) {
+                delete $.vehicleIdToStakeId[stakingData.vehicleId];
                 emit VehicleDetached(msg.sender, stakeId, stakingData.vehicleId);
             }
 
