@@ -510,8 +510,6 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
      * @param tokenId The ID of the Stake to transfer
      */
     function transferFrom(address from, address to, uint256 tokenId) public override {
-        super.transferFrom(from, to, tokenId);
-
         DimoStakingStorage storage $ = _getDimoStakingStorage();
         address stakingTo = $.stakerToStake[to];
 
@@ -525,6 +523,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
 
         IStakingBeacon($.stakeIdToStake[tokenId]).transferStake(stakingData.amount, stakingTo);
         $.stakeIdToStake[tokenId] = stakingTo;
+
+        super.transferFrom(from, to, tokenId);
 
         emit Withdrawn(from, tokenId, stakingData.amount);
 
