@@ -5,7 +5,7 @@ import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
-import '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol';
 
 import './StakingBeacon.sol';
@@ -20,7 +20,7 @@ import './interfaces/IVehicleId.sol';
  * The contract utilizes a StakingBeacon contract to manage the staked tokens and delegate voting power
  * @dev Burning Vehicle IDs is not directly handled. The functions always check token existence.
  */
-contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAdminRulesUpgradeable, UUPSUpgradeable {
     struct DimoStakingStorage {
         address dimoToken;
         address vehicleIdProxy;
@@ -75,11 +75,10 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
      * @param vehicleIdProxy_ Address of the VehicleId proxy contract
      */
     function initialize(address dimoToken_, address vehicleIdProxy_) external initializer {
-        __AccessControl_init();
+        __AccessControlDefaultAdminRules_init(3 days, msg.sender);
         __ERC721_init('DIMO Staking', 'DSTK');
         __UUPSUpgradeable_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(UPGRADER_ROLE, msg.sender);
 
         DimoStakingStorage storage $ = _getDimoStakingStorage();
@@ -250,6 +249,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
             revert TokensStillLocked(stakeId);
         }
         if (stakingData.vehicleId != 0) {
+            delete $.vehicleIdToStakeId[stakingData.vehicleId];
             emit VehicleDetached(msg.sender, stakeId, stakingData.vehicleId);
         }
 
@@ -286,6 +286,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
                 revert TokensStillLocked(stakeId);
             }
             if (stakingData.vehicleId != 0) {
+                delete $.vehicleIdToStakeId[stakingData.vehicleId];
                 emit VehicleDetached(msg.sender, stakeId, stakingData.vehicleId);
             }
 
@@ -509,8 +510,6 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
      * @param tokenId The ID of the Stake to transfer
      */
     function transferFrom(address from, address to, uint256 tokenId) public override {
-        super.transferFrom(from, to, tokenId);
-
         DimoStakingStorage storage $ = _getDimoStakingStorage();
         address stakingTo = $.stakerToStake[to];
 
@@ -525,6 +524,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
         IStakingBeacon($.stakeIdToStake[tokenId]).transferStake(stakingData.amount, stakingTo);
         $.stakeIdToStake[tokenId] = stakingTo;
 
+        super.transferFrom(from, to, tokenId);
+
         emit Withdrawn(from, tokenId, stakingData.amount);
 
         emit Staked(to, tokenId, stakingTo, stakingData.level, stakingData.amount, stakingData.lockEndTime);
@@ -535,7 +536,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
      */
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(ERC721Upgradeable, AccessControlUpgradeable) returns (bool) {
+    ) public view override(ERC721Upgradeable, AccessControlDefaultAdminRulesUpgradeable) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
@@ -554,7 +555,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlUpgradeab
      */
     function isVehicleAttachedAndActive(uint256 vehicleId) private view returns (bool) {
         DimoStakingStorage storage $ = _getDimoStakingStorage();
-        uint256 stakeId = _getDimoStakingStorage().vehicleIdToStakeId[vehicleId];
+        uint256 stakeId = $.vehicleIdToStakeId[vehicleId];
 
         return block.timestamp <= $.stakeIdToStakingData[stakeId].lockEndTime;
     }

@@ -692,6 +692,20 @@ describe('Staking', function () {
                 const boostStructAfter = await dimoStaking.stakeIdToStakingData(1)
                 expect(boostStructAfter).to.eql([0n, 0n, 0n, 0n])
             })
+            it('Should update Vehicle ID to Stake ID mapping if a Vehicle ID is attached', async () => {
+                const { dimoStaking, user1 } = await loadFixture(setup)
+
+                await dimoStaking.connect(user1).stake(1, 1)
+                await time.increase(C.stakingLevels[1].lockPeriod + 99n)
+
+                const vehicleIdToStakeIdBefore = await dimoStaking.vehicleIdToStakeId(1)
+                expect(vehicleIdToStakeIdBefore).to.equal(1)
+
+                await dimoStaking.connect(user1)['withdraw(uint256)'](1)
+
+                const vehicleIdToStakeIdAfter = await dimoStaking.vehicleIdToStakeId(1)
+                expect(vehicleIdToStakeIdAfter).to.equal(0)
+            })
             it('Should transfer correct amount of tokens to the staker', async () => {
                 const { dimoStaking, user1, mockDimoToken } = await loadFixture(setup)
 
@@ -775,7 +789,7 @@ describe('Staking', function () {
 
         context('State', () => {
             it('Should wipe staker Staking Data struct', async () => {
-                const { dimoStaking, stakingBeacon1, user1 } = await loadFixture(setupMultipleStakes)
+                const { dimoStaking, user1 } = await loadFixture(setupMultipleStakes)
 
                 let boostStructBefore
                 for (let i = 1; i < 4; i++) {
@@ -791,6 +805,25 @@ describe('Staking', function () {
                 for (let i = 1; i < 4; i++) {
                     boostStructAfter = await dimoStaking.stakeIdToStakingData(i)
                     expect(boostStructAfter).to.eql([0n, 0n, 0n, 0n])
+                }
+            })
+            it('Should update Vehicle ID to Stake ID mapping if a Vehicle ID is attached', async () => {
+                const { dimoStaking, user1 } = await loadFixture(setupMultipleStakes)
+
+                let vehicleIdToStakeIdBefore
+                for (let i = 1; i < 4; i++) {
+                    vehicleIdToStakeIdBefore = await dimoStaking.vehicleIdToStakeId(i)
+                    expect(vehicleIdToStakeIdBefore).to.equal(i)
+                }
+
+                await time.increase(C.stakingLevels[1].lockPeriod + 99n)
+
+                await dimoStaking.connect(user1)['withdraw(uint256[])']([1, 2, 3])
+
+                let vehicleIdToStakeIdAfter
+                for (let i = 1; i < 4; i++) {
+                    vehicleIdToStakeIdAfter = await dimoStaking.vehicleIdToStakeId(i)
+                    expect(vehicleIdToStakeIdAfter).to.equal(0)
                 }
             })
             it('Should transfer correct amount of tokens to the staker', async () => {
