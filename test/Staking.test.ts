@@ -306,6 +306,7 @@ describe('Staking', function () {
                     expect(args[3]).to.equal(1) // level
                     expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                     expect(args[5]).to.be.closeTo(lockEndTime, 5n) // lockEndTime
+                    expect(args[6]).to.equal(C.stakingLevels[1].points) // points
                 })
                 it('Should emit VehicleAttached with correct params if Vehicle ID is set', async () => {
                     const { dimoStaking, user1 } = await loadFixture(setup)
@@ -342,6 +343,7 @@ describe('Staking', function () {
                     expect(args[3]).to.equal(1) // level
                     expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                     expect(args[5]).to.be.closeTo(lockEndTime, 5n) // lockEndTime
+                    expect(args[6]).to.equal(C.stakingLevels[1].points) // points
                 })
                 it('Should emit VehicleAttached with correct params if Vehicle ID is set', async () => {
                     const { dimoStaking, user1, mockVehicleId } = await loadFixture(setup)
@@ -573,6 +575,7 @@ describe('Staking', function () {
                 expect(args[3]).to.equal(2) // level
                 expect(args[4]).to.equal(C.stakingLevels[2].amount) // amount
                 expect(args[5]).to.be.closeTo(lockEndTime, 5n) // lockEndTime
+                expect(args[6]).to.equal(C.stakingLevels[2].points) // points
             })
             it('Should emit VehicleAttached event with correct params if Vehicle ID is set', async () => {
                 const { dimoStaking, mockVehicleId, user1 } = await loadFixture(setup)
@@ -736,7 +739,7 @@ describe('Staking', function () {
 
                 await expect(dimoStaking.connect(user1)['withdraw(uint256)'](1))
                     .to.emit(dimoStaking, 'Withdrawn')
-                    .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                    .withArgs(user1.address, 1, C.stakingLevels[1].amount, C.stakingLevels[1].points)
             })
             it('Should emit VehicleDetached event with correct params if a Vehicle ID is attached', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setup)
@@ -852,11 +855,11 @@ describe('Staking', function () {
 
                 await expect(dimoStaking.connect(user1)['withdraw(uint256[])']([1, 2, 3]))
                     .to.emit(dimoStaking, 'Withdrawn')
-                    .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                    .withArgs(user1.address, 1, C.stakingLevels[1].amount, C.stakingLevels[1].points)
                     .to.emit(dimoStaking, 'Withdrawn')
-                    .withArgs(user1.address, 2, C.stakingLevels[1].amount)
+                    .withArgs(user1.address, 2, C.stakingLevels[1].amount, C.stakingLevels[1].points)
                     .to.emit(dimoStaking, 'Withdrawn')
-                    .withArgs(user1.address, 3, C.stakingLevels[1].amount)
+                    .withArgs(user1.address, 3, C.stakingLevels[1].amount, C.stakingLevels[1].points)
             })
             it('Should emit VehicleDetached event with correct params if a Vehicle ID is attached', async () => {
                 const { dimoStaking, user1 } = await loadFixture(setupMultipleStakes)
@@ -939,7 +942,7 @@ describe('Staking', function () {
                 const newLockEndTime = BigInt(await time.latest()) + C.stakingLevels[1].lockPeriod + 1n
                 await expect(dimoStaking.connect(user1).extendStaking(1))
                     .to.emit(dimoStaking, 'StakingExtended')
-                    .withArgs(user1.address, 1, newLockEndTime)
+                    .withArgs(user1.address, 1, newLockEndTime, C.stakingLevels[1].points)
             })
         })
     })
@@ -1519,7 +1522,7 @@ describe('Staking', function () {
 
                         await expect(dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1))
                             .to.emit(dimoStaking, 'Withdrawn')
-                            .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                            .withArgs(user1.address, 1, C.stakingLevels[1].amount, C.stakingLevels[1].points)
                     })
                     it('Should emit Staked event with correct params', async () => {
                         const { dimoStaking, user1, user2 } = await loadFixture(setup)
@@ -1543,6 +1546,7 @@ describe('Staking', function () {
                         expect(args[3]).to.equal(1) // level
                         expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                         expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                        expect(args[6]).to.equal(C.stakingLevels[1].points) // points
                     })
                 })
 
@@ -1559,7 +1563,7 @@ describe('Staking', function () {
                                 ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
                         )
                             .to.emit(dimoStaking, 'Withdrawn')
-                            .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                            .withArgs(user1.address, 1, C.stakingLevels[1].amount, C.stakingLevels[1].points)
                     })
                     it('Should emit Staked event with correct params', async () => {
                         const { dimoStaking, user1, user2 } = await loadFixture(setup)
@@ -1585,6 +1589,7 @@ describe('Staking', function () {
                         expect(args[3]).to.equal(1) // level
                         expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                         expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                        expect(args[6]).to.equal(C.stakingLevels[1].points) // points
                     })
                 })
             })
@@ -1598,7 +1603,7 @@ describe('Staking', function () {
 
                         await expect(dimoStaking.connect(user1).transferFrom(user1.address, user2.address, 1))
                             .to.emit(dimoStaking, 'Withdrawn')
-                            .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                            .withArgs(user1.address, 1, C.stakingLevels[1].amount, C.stakingLevels[1].points)
                     })
                     it('Should emit Staked event with correct params', async () => {
                         const { dimoStaking, user1, user2 } = await loadFixture(setup)
@@ -1621,6 +1626,7 @@ describe('Staking', function () {
                         expect(args[3]).to.equal(1) // level
                         expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                         expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                        expect(args[6]).to.equal(C.stakingLevels[1].points) // points
                     })
                 })
 
@@ -1636,7 +1642,7 @@ describe('Staking', function () {
                                 ['safeTransferFrom(address,address,uint256)'](user1.address, user2.address, 1)
                         )
                             .to.emit(dimoStaking, 'Withdrawn')
-                            .withArgs(user1.address, 1, C.stakingLevels[1].amount)
+                            .withArgs(user1.address, 1, C.stakingLevels[1].amount, C.stakingLevels[1].points)
                     })
                     it('Should emit Staked event with correct params', async () => {
                         const { dimoStaking, user1, user2 } = await loadFixture(setup)
@@ -1661,6 +1667,7 @@ describe('Staking', function () {
                         expect(args[3]).to.equal(1) // level
                         expect(args[4]).to.equal(C.stakingLevels[1].amount) // amount
                         expect(args[5]).to.equal(lockEndTime) // lockEndTime
+                        expect(args[6]).to.equal(C.stakingLevels[1].points) // points
                     })
                 })
             })

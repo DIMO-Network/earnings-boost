@@ -49,12 +49,13 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
         address indexed stakingBeacon,
         uint8 level,
         uint256 amount,
-        uint256 lockEndTime
+        uint256 lockEndTime,
+        uint256 points
     );
-    event Withdrawn(address indexed user, uint256 indexed stakeId, uint256 amount);
+    event Withdrawn(address indexed user, uint256 indexed stakeId, uint256 amount, uint256 points);
     event VehicleAttached(address indexed user, uint256 indexed stakeId, uint256 indexed vehicleId);
     event VehicleDetached(address indexed user, uint256 indexed stakeId, uint256 indexed vehicleId);
-    event StakingExtended(address indexed user, uint256 indexed stakeId, uint256 newLockEndTime);
+    event StakingExtended(address indexed user, uint256 indexed stakeId, uint256 newLockEndTime, uint256 points);
 
     error InvalidStakingLevel(uint8 level);
     error InvalidStakeId(uint256 stakeId);
@@ -139,7 +140,8 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
             stakingBeaconAddress,
             level,
             stakingLevel.amount,
-            stakingData.lockEndTime
+            stakingData.lockEndTime,
+            stakingLevel.points
         );
 
         if (vehicleId != 0) {
@@ -200,7 +202,15 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
 
         $.stakeIdToStakingData[stakeId] = newStakingData;
 
-        emit Staked(msg.sender, stakeId, address(staking), level, newStakingData.amount, newStakingData.lockEndTime);
+        emit Staked(
+            msg.sender,
+            stakeId,
+            address(staking),
+            level,
+            newStakingData.amount,
+            newStakingData.lockEndTime,
+            stakingLevel.points
+        );
 
         if (vehicleId != currentAttachedVehicleId) {
             if (vehicleId == 0) {
@@ -259,7 +269,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
 
         delete $.stakeIdToStakingData[stakeId];
 
-        emit Withdrawn(msg.sender, stakeId, amountWithdrawn);
+        emit Withdrawn(msg.sender, stakeId, amountWithdrawn, $.stakingLevels[stakingData.level].points);
     }
 
     /**
@@ -296,7 +306,7 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
 
             delete $.stakeIdToStakingData[stakeId];
 
-            emit Withdrawn(msg.sender, stakeId, amountWithdrawn);
+            emit Withdrawn(msg.sender, stakeId, amountWithdrawn, $.stakingLevels[stakingData.level].points);
         }
     }
 
@@ -314,11 +324,12 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
         DimoStakingStorage storage $ = _getDimoStakingStorage();
         StakingData memory stakingData = $.stakeIdToStakingData[stakeId];
 
-        uint256 newLockEndTime = block.timestamp + $.stakingLevels[stakingData.level].lockPeriod;
+        StakingLevel memory stakingLevel = $.stakingLevels[stakingData.level];
+        uint256 newLockEndTime = block.timestamp + stakingLevel.lockPeriod;
 
         $.stakeIdToStakingData[stakeId].lockEndTime = newLockEndTime;
 
-        emit StakingExtended(msg.sender, stakeId, newLockEndTime);
+        emit StakingExtended(msg.sender, stakeId, newLockEndTime, stakingLevel.points);
     }
 
     /**
@@ -526,9 +537,9 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
 
         super.transferFrom(from, to, tokenId);
 
-        emit Withdrawn(from, tokenId, stakingData.amount);
-
-        emit Staked(to, tokenId, stakingTo, stakingData.level, stakingData.amount, stakingData.lockEndTime);
+        uint256 points = $.stakingLevels[stakingData.level].points;
+        emit Withdrawn(from, tokenId, stakingData.amount, points);
+        emit Staked(to, tokenId, stakingTo, stakingData.level, stakingData.amount, stakingData.lockEndTime, points);
     }
 
     /**

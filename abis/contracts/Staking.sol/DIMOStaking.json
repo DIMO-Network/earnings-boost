@@ -531,6 +531,12 @@
         "internalType": "uint256",
         "name": "lockEndTime",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "points",
+        "type": "uint256"
       }
     ],
     "name": "Staked",
@@ -555,6 +561,12 @@
         "indexed": false,
         "internalType": "uint256",
         "name": "newLockEndTime",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "points",
         "type": "uint256"
       }
     ],
@@ -668,6 +680,12 @@
         "indexed": false,
         "internalType": "uint256",
         "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "points",
         "type": "uint256"
       }
     ],
