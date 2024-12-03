@@ -2,5 +2,8 @@
     "ProxyModule": {
         "DimoToken": "0x21cFE003997fB7c2B3cfe5cf71e7833B7B2eCe10",
         "VehicleId": "0x45fbCD3ef7361d156e8b16F5538AE36DEdf61Da8"
+    },
+    "UpgradeModule": {
+        "DIMOStakingProxy": "0xA010a42DE263592E631d3DCDC621ae7BFfCca338"
     }
 }

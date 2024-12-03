@@ -62,7 +62,7 @@ npm run gas-reporter
 ## Deploy
 
 ```sh
-npx hardhat ignition deploy ./ignition/modules/DIMOStaking.ts --network <network>
+npx hardhat ignition deploy ./ignition/modules/DIMOStaking.ts --parameters ./ignition/data/parameters.json --network <network>
 ```
 
 In case of reconciliation failed, you can wipe the `journal.jsonl`. Make sure to use the last `futureId` in the journal.
