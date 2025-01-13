@@ -55,7 +55,7 @@ describe('Staking', function () {
         return { user1, user2, dimoStaking, stakingBeacon1, mockDimoToken, mockVehicleId }
     }
 
-    describe.only('setExpiration', () => {
+    describe('setExpiration', () => {
         it('Should revert if stake ID does not exist', async () => {
             const { dimoStaking, user1 } = await loadFixture(setup)
 
