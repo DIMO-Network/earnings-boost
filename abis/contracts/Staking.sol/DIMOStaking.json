@@ -1014,6 +1014,11 @@
         "internalType": "address",
         "name": "vehicleIdProxy_",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "admin",
+        "type": "address"
       }
     ],
     "name": "initialize",

@@ -75,12 +75,12 @@ contract DIMOStaking is Initializable, ERC721Upgradeable, AccessControlDefaultAd
      * @param dimoToken_ Address of the DIMO token contract
      * @param vehicleIdProxy_ Address of the VehicleId proxy contract
      */
-    function initialize(address dimoToken_, address vehicleIdProxy_) external initializer {
-        __AccessControlDefaultAdminRules_init(3 days, msg.sender);
+    function initialize(address dimoToken_, address vehicleIdProxy_, address admin) external initializer {
+        __AccessControlDefaultAdminRules_init(3 days, admin);
         __ERC721_init('DIMO Staking', 'DSTK');
         __UUPSUpgradeable_init();
 
-        _grantRole(UPGRADER_ROLE, msg.sender);
+        _grantRole(UPGRADER_ROLE, admin);
 
         DimoStakingStorage storage $ = _getDimoStakingStorage();
 

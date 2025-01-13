@@ -1,13 +1,15 @@
 import { buildModule } from '@nomicfoundation/hardhat-ignition/modules'
 
 const ProxyTestModule = buildModule('ProxyTestModule', (m) => {
+    const admin = m.getAccount(0)
+
     // Deploy the implementation contract
     const implementation = m.contract('DIMOStaking')
     const mockDimoToken = m.contract('MockDimoToken')
     const mockVehicleId = m.contract('MockVehicleId')
 
     // Encode the initialize function call for the contract.
-    const initialize = m.encodeFunctionCall(implementation, 'initialize', [mockDimoToken, mockVehicleId])
+    const initialize = m.encodeFunctionCall(implementation, 'initialize', [mockDimoToken, mockVehicleId, admin])
 
     // Deploy the ERC1967 Proxy, pointing to the implementation
     const proxy = m.contract('ERC1967Proxy', [implementation, initialize])
