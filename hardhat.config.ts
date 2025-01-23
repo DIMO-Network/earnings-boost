@@ -59,7 +59,7 @@ const config: HardhatUserConfig = {
     abiExporter: {
         path: './abis',
         runOnCompile: true,
-        only: [':DIMOStaking$', ':StakingBeacon$'],
+        only: [':DIMOStaking$', ':DIMOStakingDev$', ':StakingBeacon$'],
         format: 'json',
     },
 }
